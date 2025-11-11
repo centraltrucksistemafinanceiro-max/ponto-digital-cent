@@ -13,6 +13,7 @@ import {
   setPersistence,
   browserLocalPersistence,
   browserSessionPersistence,
+  sendPasswordResetEmail,
 } from 'firebase/auth';
 import { 
   collection, 
@@ -146,7 +147,27 @@ function App() {
 
   // FIX: Renamed `password_hash` parameter to `password` for clarity.
   const handleLogin = useCallback(async (nameOrEmail: string, password: string, rememberMe: boolean): Promise<{success: boolean; error?: string}> => {
-    const email = nameOrEmail.includes('@') ? nameOrEmail : `${nameOrEmail.toLowerCase()}@ponto.app`;
+    let email = nameOrEmail;
+
+    // If the input is a username (no '@'), query Firestore to find the associated email.
+    if (!nameOrEmail.includes('@')) {
+        try {
+            const usersSnapshot = await getDocs(collection(db, "users"));
+            // Note: This fetches all users. For larger applications, a more scalable solution
+            // like a Cloud Function or storing a lowercase name for querying would be better.
+            const allUsers = usersSnapshot.docs.map(doc => doc.data() as Omit<User, 'id'>);
+            const foundUser = allUsers.find(u => u.name.toLowerCase() === nameOrEmail.toLowerCase());
+
+            if (foundUser) {
+                email = foundUser.email;
+            }
+            // If no user is found, `email` remains the typed username, which will correctly fail authentication.
+        } catch (error) {
+            console.error("Error querying users for login:", error);
+            // Let the login fail in the main try/catch block below.
+        }
+    }
+      
     try {
       const persistence = rememberMe ? browserLocalPersistence : browserSessionPersistence;
       await setPersistence(auth, persistence);
@@ -170,6 +191,9 @@ function App() {
       console.error("Login failed:", error);
       await logAnonymousActivity('USER_LOGIN_FAIL', { attemptedEmail: email, errorCode: error.code });
       let message = 'Nome de usuário ou senha inválidos.';
+      if (error.code === 'auth/invalid-email' && !email.includes('@')) {
+        message = 'Nome de usuário não encontrado. Verifique a digitação ou use o e-mail completo.';
+      }
       if (error.code === 'auth/configuration-not-found') {
           message = 'Erro de configuração do Firebase. Verifique as credenciais no arquivo `firebase.ts` e as configurações no console do Firebase.';
       }
@@ -370,27 +394,23 @@ function App() {
     }
   }, [currentUser, logActivity]);
 
-  const handleAdminSetUserPassword = useCallback(async (userId: string, newPassword: string): Promise<{ success: boolean; message: string }> => {
+  const handleAdminTriggerPasswordReset = useCallback(async (email: string): Promise<{ success: boolean; message: string }> => {
     if (!currentUser || currentUser.role !== Role.ADMIN) {
         return { success: false, message: "Apenas administradores podem realizar esta ação." };
     }
-
-    // --- IMPLEMENTATION WARNING ---
-    // Changing another user's password is a privileged action that CANNOT be done
-    // securely from the client-side using the standard Firebase Auth SDK.
-    // This functionality requires the Firebase Admin SDK in a secure backend environment,
-    // such as a Firebase Cloud Function.
-
-    // The code below is a placeholder to illustrate how the call to such a backend function would look.
-    console.error("FUNCTIONALITY NOT IMPLEMENTED: Password changes require a backend (Firebase Cloud Function).");
-    
-    await logActivity(currentUser, 'ADMIN_PASSWORD_SET_ATTEMPT', { targetUserId: userId });
-
-    // This is a placeholder for the UI while the backend function is not available:
-    const message = "Funcionalidade indisponível. A alteração de senha de outro usuário requer uma configuração de backend (servidor) que não está presente nesta aplicação.";
-    alert(message);
-    return { success: false, message: "Funcionalidade indisponível." };
-
+    try {
+        await sendPasswordResetEmail(auth, email);
+        await logActivity(currentUser, 'ADMIN_PASSWORD_RESET_EMAIL_SENT', { targetUserEmail: email });
+        return { success: true, message: `E-mail de redefinição de senha enviado para ${email}.` };
+    } catch (error: any) {
+        console.error("Error sending password reset email:", error);
+        await logActivity(currentUser, 'ADMIN_PASSWORD_RESET_EMAIL_FAIL', { targetUserEmail: email, error: error.message });
+        let message = 'Falha ao enviar e-mail de redefinição de senha.';
+        if (error.code === 'auth/user-not-found') {
+            message = 'Nenhum usuário encontrado com este e-mail.';
+        }
+        return { success: false, message: message };
+    }
   }, [currentUser, logActivity]);
 
   if (authLoading) {
@@ -420,7 +440,7 @@ function App() {
             onUpdateAppConfig={handleUpdateAppConfig}
             onExportData={handleExportData}
             onImportData={handleImportData}
-            onSetUserPassword={handleAdminSetUserPassword}
+            onTriggerPasswordReset={handleAdminTriggerPasswordReset}
           />
         ) : (
           <EmployeeDashboard 
