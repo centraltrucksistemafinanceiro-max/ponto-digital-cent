@@ -13,6 +13,8 @@ interface AdminDashboardProps {
   onAddUser: (user: Omit<User, 'id'>, password: string) => void;
   // FIX: Renamed prop to follow camelCase convention.
   onUpdateTimeEntry: (entry: TimeEntry) => void;
+  onDeleteTimeEntry: (entryId: string) => void;
+  onAddTimeEntry: (entry: Omit<TimeEntry, 'id'>) => void;
   onUpdateUser: (user: User) => void;
   appConfig: AppConfig;
   onUpdateAppConfig: (config: AppConfig) => void;
@@ -27,7 +29,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     users, 
     timeEntries, 
     onAddUser, 
-    onUpdateTimeEntry, 
+    onUpdateTimeEntry,
+    onDeleteTimeEntry,
+    onAddTimeEntry, 
     onUpdateUser, 
     appConfig, 
     onUpdateAppConfig,
@@ -103,6 +107,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             users={employeeUsers} 
             timeEntries={timeEntries} 
             onUpdateTimeEntry={onUpdateTimeEntry} 
+            onDeleteTimeEntry={onDeleteTimeEntry}
+            onAddTimeEntry={onAddTimeEntry}
             workdayHours={appConfig.workdayHours}
           />
         )}

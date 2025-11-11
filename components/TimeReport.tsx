@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { User, TimeEntry, TimeEntryType } from '../types';
 import Modal from './Modal';
-import { EditIcon, ChartBarIcon, TargetIcon, ClockIcon, WarningIcon, PrintIcon, ExcelIcon, PdfIcon, UserGroupIcon } from './icons';
+import { EditIcon, ChartBarIcon, TargetIcon, ClockIcon, WarningIcon, PrintIcon, ExcelIcon, PdfIcon, UserGroupIcon, TrashIcon, PlusCircleIcon } from './icons';
 
 // Add jsPDF and XLSX types to the global window object for use with CDN script
 declare global {
@@ -16,6 +16,8 @@ interface TimeReportProps {
   timeEntries: TimeEntry[];
   // FIX: Renamed prop to follow camelCase convention.
   onUpdateTimeEntry: (entry: TimeEntry) => void;
+  onDeleteTimeEntry: (entryId: string) => void;
+  onAddTimeEntry: (entry: Omit<TimeEntry, 'id'>) => void;
   workdayHours: number;
 }
 
@@ -52,7 +54,7 @@ const isSameDay = (d1: Date, d2: Date) => {
            d1.getDate() === d2.getDate();
 }
 
-const TimeReport: React.FC<TimeReportProps> = ({ users, timeEntries, onUpdateTimeEntry, workdayHours }) => {
+const TimeReport: React.FC<TimeReportProps> = ({ users, timeEntries, onUpdateTimeEntry, onDeleteTimeEntry, onAddTimeEntry, workdayHours }) => {
   const [editingDay, setEditingDay] = useState<ProcessedEntry | null>(null);
   const [filters, setFilters] = useState({
     userId: 'all',
@@ -133,6 +135,17 @@ const TimeReport: React.FC<TimeReportProps> = ({ users, timeEntries, onUpdateTim
     .sort((a, b) => new Date(b.date.split('/').reverse().join('-')).getTime() - new Date(a.date.split('/').reverse().join('-')).getTime());
   }, [timeEntries, workdayHours]);
 
+  useEffect(() => {
+    if (editingDay) {
+      const updatedDayData = processedEntries.find(entry => entry.id === editingDay.id);
+      if (updatedDayData) {
+        setEditingDay(updatedDayData);
+      } else {
+        setEditingDay(null);
+      }
+    }
+  }, [processedEntries, editingDay]);
+
   const filteredEntries = useMemo(() => {
     return processedEntries.filter(entry => {
       if (filters.userId !== 'all' && entry.userId !== filters.userId) {
@@ -153,13 +166,24 @@ const TimeReport: React.FC<TimeReportProps> = ({ users, timeEntries, onUpdateTim
   }, [processedEntries, filters]);
 
   const entriesWithAccumulatedBalance = useMemo(() => {
-    let accumulatedBalance = 0;
+    // Use a map to track balance per user
+    const accumulatedBalances: { [key: string]: number } = {};
+    
     // We sort the filtered entries by date to correctly calculate the running total
     const sorted = [...filteredEntries].sort((a, b) => new Date(a.date.split('/').reverse().join('-')).getTime() - new Date(b.date.split('/').reverse().join('-')).getTime());
 
     const entries = sorted.map(entry => {
-        accumulatedBalance += entry.balance;
-        return { ...entry, accumulatedBalance };
+        // Get the current balance for the user, or 0 if it's the first entry for them
+        const currentBalance = accumulatedBalances[entry.userId] || 0;
+        
+        // Calculate the new accumulated balance
+        const newAccumulatedBalance = currentBalance + entry.balance;
+        
+        // Update the balance for the user in our tracking map
+        accumulatedBalances[entry.userId] = newAccumulatedBalance;
+        
+        // Return the entry with the new property
+        return { ...entry, accumulatedBalance: newAccumulatedBalance };
     });
     
     // Return to descending order for display
@@ -431,6 +455,8 @@ const TimeReport: React.FC<TimeReportProps> = ({ users, timeEntries, onUpdateTim
                 day={editingDay} 
                 onClose={() => setEditingDay(null)} 
                 onSave={onUpdateTimeEntry}
+                onDelete={onDeleteTimeEntry}
+                onAdd={onAddTimeEntry}
             />
         )}
     </div>
@@ -441,11 +467,23 @@ interface EditDayModalProps {
     day: ProcessedEntry;
     onClose: () => void;
     onSave: (entry: TimeEntry) => void;
+    onDelete: (entryId: string) => void;
+    onAdd: (entry: Omit<TimeEntry, 'id'>) => void;
 }
 
-const EditDayModal: React.FC<EditDayModalProps> = ({ day, onClose, onSave }) => {
+const EditDayModal: React.FC<EditDayModalProps> = ({ day, onClose, onSave, onDelete, onAdd }) => {
     const [entries, setEntries] = useState<TimeEntry[]>(day.originalEntries);
+    const [isAdding, setIsAdding] = useState(false);
+    const [newEntryData, setNewEntryData] = useState({
+        type: TimeEntryType.ENTRADA,
+        timestamp: new Date(),
+        observation: '',
+    });
 
+    useEffect(() => {
+        setEntries(day.originalEntries);
+    }, [day.originalEntries]);
+    
     const handleTimeChange = (id: string, newDateTime: string) => {
         setEntries(prev => prev.map(e => e.id === id ? {...e, timestamp: new Date(newDateTime)} : e));
     };
@@ -454,11 +492,38 @@ const EditDayModal: React.FC<EditDayModalProps> = ({ day, onClose, onSave }) => 
         setEntries(prev => prev.map(e => e.id === id ? {...e, observation: newObservation} : e));
     };
     
-    const handleSave = () => {
+    const handleSaveUpdates = () => {
         entries.forEach(entry => {
-            onSave(entry);
+            const original = day.originalEntries.find(o => o.id === entry.id);
+            if (original?.timestamp !== entry.timestamp || original?.observation !== entry.observation) {
+                onSave(entry);
+            }
         });
         onClose();
+    };
+
+    const handleDelete = (entryId: string) => {
+        // The confirm dialog was removed because it was being blocked by the execution environment's sandbox,
+        // preventing the delete action from ever running.
+        // The optimistic UI update was also removed to rely on the single source of truth from props,
+        // ensuring the UI only reflects the confirmed state of the database.
+        onDelete(entryId);
+    };
+
+    const handleAddNewEntry = () => {
+        const [dayDate, month, year] = day.date.split('/').map(Number);
+        const newTimestamp = new Date(newEntryData.timestamp);
+        // Set the date from the day being edited, preserving the new time
+        newTimestamp.setFullYear(year, month - 1, dayDate);
+
+        onAdd({
+            userId: day.userId,
+            timestamp: newTimestamp,
+            type: newEntryData.type,
+            observation: newEntryData.observation,
+        });
+        setIsAdding(false);
+        setNewEntryData({type: TimeEntryType.ENTRADA, timestamp: new Date(), observation: ''});
     };
     
     // Helper to format date for datetime-local input
@@ -470,36 +535,93 @@ const EditDayModal: React.FC<EditDayModalProps> = ({ day, onClose, onSave }) => 
     
     return (
         <Modal isOpen={true} onClose={onClose} title={`Editar Dia: ${day.date}`}>
-             <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-                {Object.values(TimeEntryType).map(type => {
-                    const entry = entries.find(e => e.type === type);
-                    if (!entry) return null; // Or render a disabled state
-                    return (
-                        <div key={entry.id} className="p-3 bg-primary rounded-md">
-                            <h4 className="font-semibold text-highlight mb-2">{type}</h4>
-                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-medium text-highlight">Data e Hora</label>
-                                    <input
-                                        type="datetime-local"
-                                        value={toLocalISOString(entry.timestamp)}
-                                        onChange={(e) => handleTimeChange(entry.id, e.target.value)}
-                                        className="mt-1 block w-full bg-secondary border border-accent rounded-md shadow-sm py-2 px-3 text-light focus:outline-none focus:ring-highlight focus:border-highlight sm:text-sm"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-highlight">Observação</label>
-                                    <input
-                                        type="text"
-                                        value={entry.observation}
-                                        onChange={(e) => handleObservationChange(entry.id, e.target.value)}
-                                        className="mt-1 block w-full bg-secondary border border-accent rounded-md shadow-sm py-2 px-3 text-light focus:outline-none focus:ring-highlight focus:border-highlight sm:text-sm"
-                                    />
-                                </div>
+             <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                {entries.sort((a,b) => a.timestamp.getTime() - b.timestamp.getTime()).map(entry => (
+                    <div key={entry.id} className="p-3 bg-primary rounded-md">
+                        <div className="flex justify-between items-center mb-2">
+                            <h4 className="font-semibold text-highlight">{entry.type}</h4>
+                            <button onClick={() => handleDelete(entry.id)} className="text-red-400 hover:text-red-300 transition-colors" aria-label="Excluir registro">
+                                <TrashIcon />
+                            </button>
+                        </div>
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-medium text-highlight">Data e Hora</label>
+                                <input
+                                    type="datetime-local"
+                                    value={toLocalISOString(entry.timestamp)}
+                                    onChange={(e) => handleTimeChange(entry.id, e.target.value)}
+                                    className="mt-1 block w-full bg-secondary border border-accent rounded-md shadow-sm py-2 px-3 text-light focus:outline-none focus:ring-highlight focus:border-highlight sm:text-sm"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-highlight">Observação</label>
+                                <input
+                                    type="text"
+                                    value={entry.observation}
+                                    onChange={(e) => handleObservationChange(entry.id, e.target.value)}
+                                    className="mt-1 block w-full bg-secondary border border-accent rounded-md shadow-sm py-2 px-3 text-light focus:outline-none focus:ring-highlight focus:border-highlight sm:text-sm"
+                                />
                             </div>
                         </div>
-                    );
-                })}
+                    </div>
+                ))}
+
+                {isAdding && (
+                    <div className="p-3 bg-primary border border-dashed border-accent rounded-md mt-4">
+                        <h4 className="font-semibold text-light mb-2">Novo Registro</h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                             <div>
+                                <label className="block text-xs font-medium text-highlight">Tipo</label>
+                                <select 
+                                    value={newEntryData.type}
+                                    onChange={(e) => setNewEntryData({...newEntryData, type: e.target.value as TimeEntryType})}
+                                    className="mt-1 block w-full bg-secondary border border-accent rounded-md shadow-sm py-2 px-3 text-light focus:outline-none focus:ring-highlight focus:border-highlight sm:text-sm"
+                                >
+                                    {Object.values(TimeEntryType).map(t => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-highlight">Hora</label>
+                                <input
+                                    type="time"
+                                    value={newEntryData.timestamp.toTimeString().slice(0,5)}
+                                    onChange={(e) => {
+                                        const [hours, minutes] = e.target.value.split(':');
+                                        const newDate = new Date(newEntryData.timestamp);
+                                        newDate.setHours(parseInt(hours, 10) || 0, parseInt(minutes, 10) || 0);
+                                        setNewEntryData({...newEntryData, timestamp: newDate});
+                                    }}
+                                    className="mt-1 block w-full bg-secondary border border-accent rounded-md shadow-sm py-2 px-3 text-light focus:outline-none focus:ring-highlight focus:border-highlight sm:text-sm"
+                                />
+                            </div>
+                        </div>
+                         <div className="mt-4">
+                             <label className="block text-xs font-medium text-highlight">Observação</label>
+                              <input
+                                type="text"
+                                value={newEntryData.observation}
+                                onChange={(e) => setNewEntryData({...newEntryData, observation: e.target.value})}
+                                className="mt-1 block w-full bg-secondary border border-accent rounded-md shadow-sm py-2 px-3 text-light focus:outline-none focus:ring-highlight focus:border-highlight sm:text-sm"
+                            />
+                        </div>
+                        <div className="flex justify-end space-x-2 mt-4">
+                             <button onClick={() => setIsAdding(false)} className="py-1 px-3 border border-accent rounded-md text-sm text-light hover:bg-accent">Cancelar</button>
+                             <button onClick={handleAddNewEntry} className="py-1 px-3 bg-accent rounded-md text-sm text-white hover:bg-highlight">Adicionar</button>
+                        </div>
+                    </div>
+                )}
+
+                 {!isAdding && (
+                    <button 
+                        onClick={() => setIsAdding(true)} 
+                        className="w-full mt-4 flex items-center justify-center space-x-2 text-sm text-highlight hover:text-light bg-primary hover:bg-accent transition-colors py-2 px-4 border border-dashed border-accent rounded-md"
+                    >
+                        <PlusCircleIcon />
+                        <span>Adicionar Registro</span>
+                    </button>
+                )}
+
             </div>
             <div className="mt-6 flex justify-end space-x-4">
                 <button
@@ -509,7 +631,7 @@ const EditDayModal: React.FC<EditDayModalProps> = ({ day, onClose, onSave }) => 
                     Cancelar
                 </button>
                 <button
-                    onClick={handleSave}
+                    onClick={handleSaveUpdates}
                     className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-accent hover:bg-highlight focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-secondary focus:ring-highlight transition"
                 >
                     Salvar Alterações

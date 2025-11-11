@@ -30,6 +30,7 @@ import {
   where,
   Timestamp,
   writeBatch,
+  deleteDoc,
 } from 'firebase/firestore';
 
 
@@ -150,13 +151,11 @@ function App() {
 
   const handleLogin = useCallback(async (nameOrEmail: string, password: string, rememberMe: boolean): Promise<{success: boolean; error?: string}> => {
     try {
-        // 1. Set persistence immediately. This is critical for "Remember Me" to work correctly.
-        const persistence = rememberMe ? browserLocalPersistence : browserSessionPersistence;
-        await setPersistence(auth, persistence);
-
         let email: string;
         
-        // 2. Determine the email to use for login (either from username lookup or direct email)
+        // 1. Determine the email to use for login.
+        // This is done before setting persistence because async Firestore calls should not
+        // be placed between setPersistence and signInWithEmailAndPassword.
         const usersRef = collection(db, "users");
         const querySnapshot = await getDocs(usersRef);
         const foundUser = querySnapshot.docs.find(doc => doc.data().name.toLowerCase() === nameOrEmail.toLowerCase());
@@ -164,9 +163,14 @@ function App() {
         if (foundUser) {
             email = foundUser.data().email;
         } else {
+            // If not found by name, assume the user entered their email directly.
             email = nameOrEmail;
         }
       
+        // 2. Set persistence immediately before signing in. This order is crucial.
+        const persistence = rememberMe ? browserLocalPersistence : browserSessionPersistence;
+        await setPersistence(auth, persistence);
+        
         // 3. Attempt to sign in
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
       
@@ -242,6 +246,30 @@ function App() {
     } catch (error) {
       console.error("Error updating time entry:", error);
     }
+  }, [currentUser, logActivity, timeEntries]);
+
+  const handleDeleteTimeEntry = useCallback(async (entryId: string) => {
+      const entryToDelete = timeEntries.find(e => e.id === entryId);
+      if (!entryToDelete) {
+          console.error("Time entry not found for deletion:", entryId);
+          return;
+      }
+
+      await logActivity(currentUser, 'DELETE_TIME_ENTRY', {
+          targetUserId: entryToDelete.userId,
+          targetEntryId: entryToDelete.id,
+          deletedEntry: {
+              type: entryToDelete.type,
+              timestamp: entryToDelete.timestamp.toISOString(),
+              observation: entryToDelete.observation
+          }
+      });
+
+      try {
+          await deleteDoc(doc(db, "time_entries", entryId));
+      } catch (error) {
+          console.error("Error deleting time entry:", error);
+      }
   }, [currentUser, logActivity, timeEntries]);
 
   const handleAddUser = useCallback(async (user: Omit<User, 'id'>, password: string) => {
@@ -463,6 +491,8 @@ function App() {
             timeEntries={timeEntries}
             onAddUser={handleAddUser}
             onUpdateTimeEntry={handleUpdateTimeEntry}
+            onDeleteTimeEntry={handleDeleteTimeEntry}
+            onAddTimeEntry={handleAddTimeEntry}
             onUpdateUser={handleUpdateUser}
             appConfig={appConfig}
             onUpdateAppConfig={handleUpdateAppConfig}
