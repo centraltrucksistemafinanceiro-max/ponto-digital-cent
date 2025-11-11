@@ -149,60 +149,56 @@ function App() {
 
 
   const handleLogin = useCallback(async (nameOrEmail: string, password: string, rememberMe: boolean): Promise<{success: boolean; error?: string}> => {
-    let email: string;
-
-    // Prioritize login by username (case-insensitive).
-    // If a user is found, use their email. If not, assume the input is an email.
     try {
+        // 1. Set persistence immediately. This is critical for "Remember Me" to work correctly.
+        const persistence = rememberMe ? browserLocalPersistence : browserSessionPersistence;
+        await setPersistence(auth, persistence);
+
+        let email: string;
+        
+        // 2. Determine the email to use for login (either from username lookup or direct email)
         const usersRef = collection(db, "users");
-        // Fetch all users to perform a case-insensitive search on the client side.
-        // This is simpler and more reliable than complex Firestore queries for this use case.
         const querySnapshot = await getDocs(usersRef);
         const foundUser = querySnapshot.docs.find(doc => doc.data().name.toLowerCase() === nameOrEmail.toLowerCase());
 
         if (foundUser) {
-            // Found a user by name, use their registered email for authentication.
             email = foundUser.data().email;
         } else {
-            // No user found by name, assume the input is the email itself.
             email = nameOrEmail;
         }
-    } catch (error) {
-        console.error("Error querying users for login:", error);
-        await logAnonymousActivity('USER_LOGIN_FAIL', { attemptedUsername: nameOrEmail, reason: 'DB query error' });
-        return { success: false, error: 'Ocorreu um erro ao verificar as credenciais.' };
-    }
       
-    try {
-      const persistence = rememberMe ? browserLocalPersistence : browserSessionPersistence;
-      await setPersistence(auth, persistence);
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        // 3. Attempt to sign in
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
       
-      const user = userCredential.user;
-      if (user && user.email) {
-          const usersRef = collection(db, "users");
-          const q = query(usersRef, where("email", "==", user.email));
-          const querySnapshot = await getDocs(q);
-          if (!querySnapshot.empty) {
-              const userDoc = querySnapshot.docs[0];
-              const loggedInUser = { id: userDoc.id, ...userDoc.data() } as User;
-              // We pass the fetched user object directly, as `currentUser` state is not updated yet.
-              await logActivity(loggedInUser, 'USER_LOGIN_SUCCESS', { email: loggedInUser.email });
-          }
-      }
+        // 4. On success, log the activity
+        const user = userCredential.user;
+        if (user && user.email) {
+            const usersRef = collection(db, "users");
+            const q = query(usersRef, where("email", "==", user.email));
+            const querySnapshot = await getDocs(q);
+            if (!querySnapshot.empty) {
+                const userDoc = querySnapshot.docs[0];
+                const loggedInUser = { id: userDoc.id, ...userDoc.data() } as User;
+                await logActivity(loggedInUser, 'USER_LOGIN_SUCCESS', { email: loggedInUser.email });
+            }
+        }
 
-      return { success: true };
+        return { success: true };
+
     } catch (error: any) {
-      console.error("Login failed:", error);
-      await logAnonymousActivity('USER_LOGIN_FAIL', { attemptedIdentifier: nameOrEmail, finalEmailUsed: email, errorCode: error.code });
+        // 5. Unified error handling for the entire process
+        console.error("Login process failed:", error);
+        await logAnonymousActivity('USER_LOGIN_FAIL', { attemptedIdentifier: nameOrEmail, errorCode: error.code });
       
-      let message = 'Ocorreu um erro desconhecido.';
-      if (error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-email' || error.code === 'auth/user-not-found') {
-          message = 'Nome de usuário/e-mail ou senha inválidos.';
-      } else if (error.code === 'auth/configuration-not-found') {
-          message = 'Erro de configuração do Firebase. Verifique as credenciais no arquivo `firebase.ts` e as configurações no console do Firebase.';
-      }
-      return { success: false, error: message };
+        let message = 'Ocorreu um erro desconhecido.';
+        if (error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-email' || error.code === 'auth/user-not-found') {
+            message = 'Nome de usuário/e-mail ou senha inválidos.';
+        } else if (error.code === 'auth/configuration-not-found') {
+            message = 'Erro de configuração do Firebase. Verifique as credenciais no arquivo `firebase.ts` e as configurações no console do Firebase.';
+        } else {
+            message = 'Falha ao fazer login. Verifique suas credenciais e a conexão com a internet.';
+        }
+        return { success: false, error: message };
     }
   }, [logActivity, logAnonymousActivity]);
 
