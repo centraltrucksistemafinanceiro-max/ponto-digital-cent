@@ -148,31 +148,29 @@ function App() {
   }, [currentUser]);
 
 
-  // FIX: Renamed `password_hash` parameter to `password` for clarity.
   const handleLogin = useCallback(async (nameOrEmail: string, password: string, rememberMe: boolean): Promise<{success: boolean; error?: string}> => {
-    let email = nameOrEmail;
+    let email: string;
 
-    // If the input is a username (no '@'), query Firestore to find the associated email.
-    if (!nameOrEmail.includes('@')) {
-        try {
-            const usersRef = collection(db, "users");
-            // Use a case-insensitive query to be more user-friendly
-            const q = query(usersRef, where("name", ">=", nameOrEmail), where("name", "<=", nameOrEmail + '\uf8ff'));
-            const querySnapshot = await getDocs(q);
-            const foundUser = querySnapshot.docs.find(doc => doc.data().name.toLowerCase() === nameOrEmail.toLowerCase());
+    // Prioritize login by username (case-insensitive).
+    // If a user is found, use their email. If not, assume the input is an email.
+    try {
+        const usersRef = collection(db, "users");
+        // Fetch all users to perform a case-insensitive search on the client side.
+        // This is simpler and more reliable than complex Firestore queries for this use case.
+        const querySnapshot = await getDocs(usersRef);
+        const foundUser = querySnapshot.docs.find(doc => doc.data().name.toLowerCase() === nameOrEmail.toLowerCase());
 
-            if (foundUser) {
-                email = foundUser.data().email;
-            } else {
-                // If the username is not found, return an error immediately to avoid auth/invalid-email
-                await logAnonymousActivity('USER_LOGIN_FAIL', { attemptedUsername: nameOrEmail, reason: 'Username not found' });
-                return { success: false, error: 'Nome de usuário não encontrado. Verifique a digitação ou use o e-mail completo.' };
-            }
-        } catch (error) {
-            console.error("Error querying users for login:", error);
-            await logAnonymousActivity('USER_LOGIN_FAIL', { attemptedUsername: nameOrEmail, reason: 'DB query error' });
-            return { success: false, error: 'Ocorreu um erro ao verificar o nome de usuário.' };
+        if (foundUser) {
+            // Found a user by name, use their registered email for authentication.
+            email = foundUser.data().email;
+        } else {
+            // No user found by name, assume the input is the email itself.
+            email = nameOrEmail;
         }
+    } catch (error) {
+        console.error("Error querying users for login:", error);
+        await logAnonymousActivity('USER_LOGIN_FAIL', { attemptedUsername: nameOrEmail, reason: 'DB query error' });
+        return { success: false, error: 'Ocorreu um erro ao verificar as credenciais.' };
     }
       
     try {
@@ -196,17 +194,12 @@ function App() {
       return { success: true };
     } catch (error: any) {
       console.error("Login failed:", error);
-      await logAnonymousActivity('USER_LOGIN_FAIL', { attemptedEmail: email, errorCode: error.code });
-      let message = 'E-mail ou senha inválidos.';
-      if (error.code === 'auth/invalid-credential') {
-          if (!nameOrEmail.includes('@')) {
-              // If they used a username, we know it exists, so the password must be wrong.
-              message = 'Senha incorreta para o usuário informado.';
-          } else {
-              message = 'E-mail ou senha inválidos.';
-          }
-      }
-      if (error.code === 'auth/configuration-not-found') {
+      await logAnonymousActivity('USER_LOGIN_FAIL', { attemptedIdentifier: nameOrEmail, finalEmailUsed: email, errorCode: error.code });
+      
+      let message = 'Ocorreu um erro desconhecido.';
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-email' || error.code === 'auth/user-not-found') {
+          message = 'Nome de usuário/e-mail ou senha inválidos.';
+      } else if (error.code === 'auth/configuration-not-found') {
           message = 'Erro de configuração do Firebase. Verifique as credenciais no arquivo `firebase.ts` e as configurações no console do Firebase.';
       }
       return { success: false, error: message };
@@ -233,7 +226,6 @@ function App() {
     }
   }, [currentUser, logActivity]);
 
-  // FIX: Renamed function to follow camelCase convention.
   const handleUpdateTimeEntry = useCallback(async (updatedEntry: TimeEntry) => {
     const { id, ...data } = updatedEntry;
     const originalEntry = timeEntries.find(e => e.id === updatedEntry.id);
@@ -256,7 +248,6 @@ function App() {
     }
   }, [currentUser, logActivity, timeEntries]);
 
-  // FIX: Renamed `password_hash` parameter to `password` for clarity.
   const handleAddUser = useCallback(async (user: Omit<User, 'id'>, password: string) => {
     if (users.some(u => u.name.toLowerCase() === user.name.toLowerCase() || u.email.toLowerCase() === user.email.toLowerCase())) {
         alert("Usuário com este nome ou e-mail já existe.");
