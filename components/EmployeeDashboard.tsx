@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { User, TimeEntry, TimeEntryType } from '../types';
 import { AppConfig } from '../App';
 import Modal from './Modal';
-import { EditIcon, ClockIcon } from './icons';
+import { EditIcon, ClockIcon, EyeIcon, EyeOffIcon } from './icons';
 
 interface EmployeeDashboardProps {
   user: User;
@@ -10,6 +10,7 @@ interface EmployeeDashboardProps {
   onAddTimeEntry: (entry: Omit<TimeEntry, 'id'>) => void;
   // FIX: Renamed prop to follow camelCase convention.
   onUpdateTimeEntry: (entry: TimeEntry) => void;
+  onChangePassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; message: string; }>;
   appConfig: AppConfig;
 }
 
@@ -49,11 +50,12 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
     return R * c; // in metres
 }
 
-const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user, timeEntries, onAddTimeEntry, onUpdateTimeEntry, appConfig }) => {
+const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user, timeEntries, onAddTimeEntry, onUpdateTimeEntry, onChangePassword, appConfig }) => {
   const [observation, setObservation] = useState('');
   const [editingDay, setEditingDay] = useState<ProcessedDayEntry | null>(null);
   const [locationState, setLocationState] = useState<'checking' | 'allowed' | 'denied' | 'error'>('checking');
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
 
   useEffect(() => {
     if (!navigator.geolocation) {
@@ -208,38 +210,52 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user, timeEntries
 
   return (
     <div className="space-y-8">
-      <div>
-        <div className="bg-secondary p-4 sm:p-6 rounded-lg shadow-lg">
-            <h2 className="text-2xl font-bold mb-4 text-light">Registrar Ponto</h2>
-            {renderLocationStatus()}
-            <div className="mb-4">
-                <label htmlFor="observation" className="block text-sm font-medium text-highlight mb-1">
-                    Observação (opcional)
-                </label>
-                <input
-                    type="text"
-                    id="observation"
-                    value={observation}
-                    onChange={(e) => setObservation(e.target.value)}
-                    className="w-full bg-primary border border-accent rounded-md px-3 py-2 text-light focus:ring-highlight focus:border-highlight"
-                    placeholder="Ex: Reunião externa"
-                />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {actionButtons.map(btn => (
-                <button
-                key={btn.type}
-                onClick={() => handleRegister(btn.type)}
-                disabled={!btn.enabled || locationState !== 'allowed'}
-                className={`w-full text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out transform hover:scale-105
-                    ${(btn.enabled && locationState === 'allowed')
-                    ? 'bg-accent hover:bg-highlight' 
-                    : 'bg-gray-500 cursor-not-allowed opacity-50'}`}
-                >
-                {btn.label}
-                </button>
-            ))}
-            </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-8">
+          <div className="bg-secondary p-4 sm:p-6 rounded-lg shadow-lg">
+              <h2 className="text-2xl font-bold mb-4 text-light">Registrar Ponto</h2>
+              {renderLocationStatus()}
+              <div className="mb-4">
+                  <label htmlFor="observation" className="block text-sm font-medium text-highlight mb-1">
+                      Observação (opcional)
+                  </label>
+                  <input
+                      type="text"
+                      id="observation"
+                      value={observation}
+                      onChange={(e) => setObservation(e.target.value)}
+                      className="w-full bg-primary border border-accent rounded-md px-3 py-2 text-light focus:ring-highlight focus:border-highlight"
+                      placeholder="Ex: Reunião externa"
+                  />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {actionButtons.map(btn => (
+                  <button
+                  key={btn.type}
+                  onClick={() => handleRegister(btn.type)}
+                  disabled={!btn.enabled || locationState !== 'allowed'}
+                  className={`w-full text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out transform hover:scale-105
+                      ${(btn.enabled && locationState === 'allowed')
+                      ? 'bg-accent hover:bg-highlight' 
+                      : 'bg-gray-500 cursor-not-allowed opacity-50'}`}
+                  >
+                  {btn.label}
+                  </button>
+              ))}
+              </div>
+          </div>
+        </div>
+
+        <div className="lg:col-span-1">
+          <div className="bg-secondary p-4 sm:p-6 rounded-lg shadow-lg">
+            <h2 className="text-2xl font-bold mb-4 text-light">Minha Conta</h2>
+            <button
+                onClick={() => setIsChangePasswordModalOpen(true)}
+                className="w-full text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out bg-accent hover:bg-highlight"
+            >
+                Alterar Senha
+            </button>
+          </div>
         </div>
       </div>
       
@@ -300,6 +316,13 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user, timeEntries
             day={editingDay}
             onClose={() => setEditingDay(null)}
             onSave={onUpdateTimeEntry}
+        />
+      )}
+
+      {isChangePasswordModalOpen && (
+        <ChangePasswordModal
+          onClose={() => setIsChangePasswordModalOpen(false)}
+          onSubmit={onChangePassword}
         />
       )}
     </div>
@@ -364,6 +387,121 @@ const EditObservationModal: React.FC<EditObservationModalProps> = ({ day, onClos
                     Salvar Alterações
                 </button>
             </div>
+        </Modal>
+    );
+};
+
+interface ChangePasswordModalProps {
+  onClose: () => void;
+  onSubmit: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
+}
+
+const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ onClose, onSubmit }) => {
+    const [currentPassword, setCurrentPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showCurrent, setShowCurrent] = useState(false);
+    const [showNew, setShowNew] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [status, setStatus] = useState<{ type: 'error' | 'success', message: string } | null>(null);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setStatus(null);
+
+        if (newPassword !== confirmPassword) {
+            setStatus({ type: 'error', message: 'A nova senha e a confirmação não correspondem.' });
+            return;
+        }
+        if (newPassword.length < 6) {
+            setStatus({ type: 'error', message: 'A nova senha deve ter pelo menos 6 caracteres.' });
+            return;
+        }
+
+        setLoading(true);
+        const result = await onSubmit(currentPassword, newPassword);
+        setStatus({
+            type: result.success ? 'success' : 'error',
+            message: result.message
+        });
+
+        if (result.success) {
+            setTimeout(() => {
+                onClose();
+            }, 2000);
+        }
+        setLoading(false);
+    };
+
+    const renderInputWithToggle = (id: string, value: string, onChange: (val: string) => void, placeholder: string, show: boolean, onToggle: () => void) => (
+      <div className="relative">
+        <input
+          id={id}
+          type={show ? 'text' : 'password'}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          required
+          className="block w-full bg-primary border border-accent rounded-md shadow-sm py-2 px-3 text-light focus:outline-none focus:ring-highlight focus:border-highlight sm:text-sm pr-10"
+          placeholder={placeholder}
+        />
+        <button
+          type="button"
+          onClick={onToggle}
+          className="absolute inset-y-0 right-0 px-3 flex items-center text-highlight hover:text-light"
+          aria-label={show ? "Ocultar senha" : "Mostrar senha"}
+        >
+          {show ? <EyeOffIcon /> : <EyeIcon />}
+        </button>
+      </div>
+    );
+
+    return (
+        <Modal isOpen={true} onClose={onClose} title="Alterar Senha">
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                    <label htmlFor="current-password" className="block text-sm font-medium text-highlight">Senha Atual</label>
+                    {renderInputWithToggle('current-password', currentPassword, setCurrentPassword, 'Sua senha atual', showCurrent, () => setShowCurrent(!showCurrent))}
+                </div>
+                 <div>
+                    <label htmlFor="new-password" className="block text-sm font-medium text-highlight">Nova Senha</label>
+                    {renderInputWithToggle('new-password', newPassword, setNewPassword, 'Mínimo 6 caracteres', showNew, () => setShowNew(!showNew))}
+                </div>
+                 <div>
+                    <label htmlFor="confirm-password" className="block text-sm font-medium text-highlight">Confirmar Nova Senha</label>
+                    <input
+                        id="confirm-password"
+                        type={showNew ? 'text' : 'password'}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        required
+                        className="mt-1 block w-full bg-primary border border-accent rounded-md shadow-sm py-2 px-3 text-light focus:outline-none focus:ring-highlight focus:border-highlight sm:text-sm"
+                    />
+                </div>
+
+                {status && (
+                    <p className={`text-sm text-center ${status.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                        {status.message}
+                    </p>
+                )}
+
+                <div className="pt-2 flex justify-end space-x-4">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        disabled={loading}
+                        className="py-2 px-4 border border-accent rounded-md shadow-sm text-sm font-medium text-light hover:bg-accent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-secondary focus:ring-highlight transition disabled:opacity-50"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-accent hover:bg-highlight focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-secondary focus:ring-highlight transition disabled:bg-gray-500"
+                    >
+                        {loading ? 'Salvando...' : 'Salvar Senha'}
+                    </button>
+                </div>
+            </form>
         </Modal>
     );
 };

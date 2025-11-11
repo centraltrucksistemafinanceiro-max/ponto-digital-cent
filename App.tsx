@@ -14,6 +14,9 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
   sendPasswordResetEmail,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword
 } from 'firebase/auth';
 import { 
   collection, 
@@ -152,16 +155,21 @@ function App() {
     // If the input is a username (no '@'), query Firestore to find the associated email.
     if (!nameOrEmail.includes('@')) {
         try {
-            const usersSnapshot = await getDocs(collection(db, "users"));
-            // Note: This fetches all users. For larger applications, a more scalable solution
-            // like a Cloud Function or storing a lowercase name for querying would be better.
-            const allUsers = usersSnapshot.docs.map(doc => doc.data() as Omit<User, 'id'>);
-            const foundUser = allUsers.find(u => u.name.toLowerCase() === nameOrEmail.toLowerCase());
+            const usersRef = collection(db, "users");
+            const q = query(usersRef, where("name", "==", nameOrEmail));
+            const querySnapshot = await getDocs(q);
 
-            if (foundUser) {
-                email = foundUser.email;
+            if (!querySnapshot.empty) {
+                const userDoc = querySnapshot.docs[0];
+                email = userDoc.data().email;
+            } else {
+                 const qCaseInsensitive = query(usersRef, where("name", ">=", nameOrEmail), where("name", "<=", nameOrEmail + '\uf8ff'));
+                 const snapshot = await getDocs(qCaseInsensitive);
+                 const foundUser = snapshot.docs.find(doc => doc.data().name.toLowerCase() === nameOrEmail.toLowerCase());
+                 if(foundUser) {
+                    email = foundUser.data().email;
+                 }
             }
-            // If no user is found, `email` remains the typed username, which will correctly fail authentication.
         } catch (error) {
             console.error("Error querying users for login:", error);
             // Let the login fail in the main try/catch block below.
@@ -191,7 +199,7 @@ function App() {
       console.error("Login failed:", error);
       await logAnonymousActivity('USER_LOGIN_FAIL', { attemptedEmail: email, errorCode: error.code });
       let message = 'Nome de usuário ou senha inválidos.';
-      if (error.code === 'auth/invalid-email' && !email.includes('@')) {
+      if (error.code === 'auth/invalid-credential' && !nameOrEmail.includes('@')) {
         message = 'Nome de usuário não encontrado. Verifique a digitação ou use o e-mail completo.';
       }
       if (error.code === 'auth/configuration-not-found') {
@@ -401,7 +409,7 @@ function App() {
     try {
         await sendPasswordResetEmail(auth, email);
         await logActivity(currentUser, 'ADMIN_PASSWORD_RESET_EMAIL_SENT', { targetUserEmail: email });
-        return { success: true, message: `E-mail de redefinição de senha enviado para ${email}.` };
+        return { success: true, message: `E-mail de redefinição enviado para ${email}. Peça ao funcionário para verificar a caixa de entrada e a pasta de spam.` };
     } catch (error: any) {
         console.error("Error sending password reset email:", error);
         await logActivity(currentUser, 'ADMIN_PASSWORD_RESET_EMAIL_FAIL', { targetUserEmail: email, error: error.message });
@@ -412,6 +420,35 @@ function App() {
         return { success: false, message: message };
     }
   }, [currentUser, logActivity]);
+
+  const handleChangePassword = useCallback(async (currentPassword: string, newPassword: string): Promise<{ success: boolean; message: string; }> => {
+    const user = auth.currentUser;
+    if (!user || !user.email) {
+        return { success: false, message: "Usuário não autenticado." };
+    }
+    try {
+        const credential = EmailAuthProvider.credential(user.email, currentPassword);
+        // Re-authenticate the user to confirm their identity
+        await reauthenticateWithCredential(user, credential);
+        // If re-authentication is successful, update the password
+        await updatePassword(user, newPassword);
+        
+        await logActivity(currentUser, 'USER_PASSWORD_CHANGE_SUCCESS');
+        return { success: true, message: "Senha alterada com sucesso!" };
+
+    } catch (error: any) {
+        console.error("Password change failed:", error);
+        await logActivity(currentUser, 'USER_PASSWORD_CHANGE_FAIL', { error: error.code });
+        let message = "Ocorreu um erro ao alterar a senha.";
+        if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+            message = "A senha atual está incorreta.";
+        } else if (error.code === 'auth/weak-password') {
+            message = "A nova senha é muito fraca. Tente uma senha mais forte.";
+        }
+        return { success: false, message };
+    }
+  }, [currentUser, logActivity]);
+
 
   if (authLoading) {
     return <div className="min-h-screen flex items-center justify-center bg-primary text-light">Carregando...</div>;
@@ -448,6 +485,7 @@ function App() {
             timeEntries={timeEntries.filter(e => e.userId === currentUser.id)}
             onAddTimeEntry={handleAddTimeEntry}
             onUpdateTimeEntry={handleUpdateTimeEntry}
+            onChangePassword={handleChangePassword}
             appConfig={appConfig}
           />
         )}

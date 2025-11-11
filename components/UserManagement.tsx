@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { User, Role } from '../types';
 import Modal from './Modal';
-import { EditIcon } from './icons';
+import { EditIcon, KeyIcon } from './icons';
 
 interface UserManagementProps {
   users: User[];
@@ -17,6 +17,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onUpd
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<Role>(Role.EMPLOYEE);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [notification, setNotification] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,6 +33,16 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onUpd
   const handleSaveUser = (updatedUser: User) => {
     onUpdateUser(updatedUser);
     setEditingUser(null);
+  };
+
+  const handleTriggerReset = async (userEmail: string) => {
+    setNotification(null);
+    const result = await onTriggerPasswordReset(userEmail);
+    setNotification({
+        type: result.success ? 'success' : 'error',
+        text: result.message
+    });
+    setTimeout(() => setNotification(null), 5000);
   };
 
   return (
@@ -95,7 +106,14 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onUpd
         </div>
 
         <div className="lg:col-span-2 bg-secondary p-4 sm:p-6 rounded-lg shadow-lg">
-          <h2 className="text-2xl font-bold mb-4 text-light">Usuários Cadastrados</h2>
+          <div className="flex justify-between items-start">
+            <h2 className="text-2xl font-bold mb-4 text-light">Usuários Cadastrados</h2>
+          </div>
+          {notification && (
+              <div className={`mb-4 p-3 rounded-md text-sm ${notification.type === 'success' ? 'bg-green-900/70 text-green-200' : 'bg-red-900/70 text-red-200'}`}>
+                  {notification.text}
+              </div>
+          )}
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-accent">
               <thead className="bg-primary">
@@ -114,8 +132,11 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onUpd
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-light">
                         {user.role === Role.ADMIN ? 'Administrador' : 'Funcionário'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">
-                        <button onClick={() => setEditingUser(user)} className="text-highlight hover:text-light">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-right space-x-4">
+                        <button onClick={() => handleTriggerReset(user.email)} className="text-highlight hover:text-light" aria-label={`Redefinir senha de ${user.name}`}>
+                            <KeyIcon />
+                        </button>
+                        <button onClick={() => setEditingUser(user)} className="text-highlight hover:text-light" aria-label={`Editar ${user.name}`}>
                             <EditIcon />
                         </button>
                     </td>
