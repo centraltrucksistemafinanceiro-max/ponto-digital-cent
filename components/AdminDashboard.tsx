@@ -18,6 +18,7 @@ interface AdminDashboardProps {
   onUpdateAppConfig: (config: AppConfig) => void;
   onExportData: () => Promise<void>;
   onImportData: (fileContent: string) => Promise<{ success: boolean, message: string }>;
+  onSetUserPassword: (userId: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
 }
 
 type Tab = 'reports' | 'users' | 'settings';
@@ -31,7 +32,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     appConfig, 
     onUpdateAppConfig,
     onExportData,
-    onImportData
+    onImportData,
+    onSetUserPassword,
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>('reports');
 
@@ -105,7 +107,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           />
         )}
         {activeTab === 'users' && (
-          <UserManagement users={users} onAddUser={onAddUser} onUpdateUser={onUpdateUser} />
+          <UserManagement users={users} onAddUser={onAddUser} onUpdateUser={onUpdateUser} onSetUserPassword={onSetUserPassword} />
         )}
         {activeTab === 'settings' && (
           <Settings 

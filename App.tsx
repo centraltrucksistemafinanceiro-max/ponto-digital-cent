@@ -370,6 +370,29 @@ function App() {
     }
   }, [currentUser, logActivity]);
 
+  const handleAdminSetUserPassword = useCallback(async (userId: string, newPassword: string): Promise<{ success: boolean; message: string }> => {
+    if (!currentUser || currentUser.role !== Role.ADMIN) {
+        return { success: false, message: "Apenas administradores podem realizar esta ação." };
+    }
+
+    // --- IMPLEMENTATION WARNING ---
+    // Changing another user's password is a privileged action that CANNOT be done
+    // securely from the client-side using the standard Firebase Auth SDK.
+    // This functionality requires the Firebase Admin SDK in a secure backend environment,
+    // such as a Firebase Cloud Function.
+
+    // The code below is a placeholder to illustrate how the call to such a backend function would look.
+    console.error("FUNCTIONALITY NOT IMPLEMENTED: Password changes require a backend (Firebase Cloud Function).");
+    
+    await logActivity(currentUser, 'ADMIN_PASSWORD_SET_ATTEMPT', { targetUserId: userId });
+
+    // This is a placeholder for the UI while the backend function is not available:
+    const message = "Funcionalidade indisponível. A alteração de senha de outro usuário requer uma configuração de backend (servidor) que não está presente nesta aplicação.";
+    alert(message);
+    return { success: false, message: "Funcionalidade indisponível." };
+
+  }, [currentUser, logActivity]);
+
   if (authLoading) {
     return <div className="min-h-screen flex items-center justify-center bg-primary text-light">Carregando...</div>;
   }
@@ -397,6 +420,7 @@ function App() {
             onUpdateAppConfig={handleUpdateAppConfig}
             onExportData={handleExportData}
             onImportData={handleImportData}
+            onSetUserPassword={handleAdminSetUserPassword}
           />
         ) : (
           <EmployeeDashboard 
