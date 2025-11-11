@@ -1,0 +1,7 @@
+{
+  "name": "Sistema de Ponto Digital 5",
+  "description": "Um sistema de ponto digital moderno para funcionários registrarem suas horas de trabalho, com um painel de administração para gerenciamento de usuários e relatórios de tempo.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
