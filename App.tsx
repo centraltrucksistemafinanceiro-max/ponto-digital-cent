@@ -156,23 +156,22 @@ function App() {
     if (!nameOrEmail.includes('@')) {
         try {
             const usersRef = collection(db, "users");
-            const q = query(usersRef, where("name", "==", nameOrEmail));
+            // Use a case-insensitive query to be more user-friendly
+            const q = query(usersRef, where("name", ">=", nameOrEmail), where("name", "<=", nameOrEmail + '\uf8ff'));
             const querySnapshot = await getDocs(q);
+            const foundUser = querySnapshot.docs.find(doc => doc.data().name.toLowerCase() === nameOrEmail.toLowerCase());
 
-            if (!querySnapshot.empty) {
-                const userDoc = querySnapshot.docs[0];
-                email = userDoc.data().email;
+            if (foundUser) {
+                email = foundUser.data().email;
             } else {
-                 const qCaseInsensitive = query(usersRef, where("name", ">=", nameOrEmail), where("name", "<=", nameOrEmail + '\uf8ff'));
-                 const snapshot = await getDocs(qCaseInsensitive);
-                 const foundUser = snapshot.docs.find(doc => doc.data().name.toLowerCase() === nameOrEmail.toLowerCase());
-                 if(foundUser) {
-                    email = foundUser.data().email;
-                 }
+                // If the username is not found, return an error immediately to avoid auth/invalid-email
+                await logAnonymousActivity('USER_LOGIN_FAIL', { attemptedUsername: nameOrEmail, reason: 'Username not found' });
+                return { success: false, error: 'Nome de usuário não encontrado. Verifique a digitação ou use o e-mail completo.' };
             }
         } catch (error) {
             console.error("Error querying users for login:", error);
-            // Let the login fail in the main try/catch block below.
+            await logAnonymousActivity('USER_LOGIN_FAIL', { attemptedUsername: nameOrEmail, reason: 'DB query error' });
+            return { success: false, error: 'Ocorreu um erro ao verificar o nome de usuário.' };
         }
     }
       
@@ -198,9 +197,14 @@ function App() {
     } catch (error: any) {
       console.error("Login failed:", error);
       await logAnonymousActivity('USER_LOGIN_FAIL', { attemptedEmail: email, errorCode: error.code });
-      let message = 'Nome de usuário ou senha inválidos.';
-      if (error.code === 'auth/invalid-credential' && !nameOrEmail.includes('@')) {
-        message = 'Nome de usuário não encontrado. Verifique a digitação ou use o e-mail completo.';
+      let message = 'E-mail ou senha inválidos.';
+      if (error.code === 'auth/invalid-credential') {
+          if (!nameOrEmail.includes('@')) {
+              // If they used a username, we know it exists, so the password must be wrong.
+              message = 'Senha incorreta para o usuário informado.';
+          } else {
+              message = 'E-mail ou senha inválidos.';
+          }
       }
       if (error.code === 'auth/configuration-not-found') {
           message = 'Erro de configuração do Firebase. Verifique as credenciais no arquivo `firebase.ts` e as configurações no console do Firebase.';
