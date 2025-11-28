@@ -68,16 +68,16 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         </div>
         
         <div className="flex items-center">
-            <input
-                id="remember-me"
-                name="remember-me"
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="h-4 w-4 text-highlight bg-primary border-accent rounded focus:ring-highlight"
-            />
-            <label htmlFor="remember-me" className="ml-2 block text-sm text-highlight">
-                Lembrar-me
+            <label htmlFor="remember-me" className="flex items-center cursor-pointer text-sm text-highlight">
+              <input
+                  id="remember-me"
+                  name="remember-me"
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="h-4 w-4 text-highlight bg-primary border-accent rounded focus:ring-highlight"
+              />
+              <span className="ml-2">Lembrar-me</span>
             </label>
         </div>
 

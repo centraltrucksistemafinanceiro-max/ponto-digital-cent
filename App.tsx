@@ -6,6 +6,7 @@ import AdminDashboard from './components/AdminDashboard';
 import Header from './components/Header';
 import { auth, db } from './firebase';
 import { 
+  User as FirebaseAuthUser,
   onAuthStateChanged, 
   signInWithEmailAndPassword, 
   signOut,
@@ -25,12 +26,15 @@ import {
   updateDoc, 
   doc,
   getDocs,
+  getDoc,
   setDoc,
   query,
   where,
   Timestamp,
   writeBatch,
   deleteDoc,
+  DocumentSnapshot,
+  DocumentData,
 } from 'firebase/firestore';
 
 
@@ -86,21 +90,93 @@ function App() {
       }
   }, []);
 
+  const autoFixUserInconsistency = useCallback(async (
+    authUser: FirebaseAuthUser, 
+    userProfileDoc: DocumentSnapshot<DocumentData>
+  ): Promise<User | null> => {
+    const incorrectDocId = userProfileDoc.id;
+    const correctUid = authUser.uid;
+    const userProfileData = userProfileDoc.data();
+
+    if (!userProfileData) return null;
+
+    console.warn(`[AUTO-FIXING] Detected data inconsistency for user ${authUser.email}. Starting migration.
+        - Incorrect Firestore ID: ${incorrectDocId}
+        - Correct Auth UID: ${correctUid}`);
+
+    try {
+        const batch = writeBatch(db);
+
+        // 1. Create the new user document with the correct UID
+        const newUserDocRef = doc(db, "users", correctUid);
+        batch.set(newUserDocRef, userProfileData);
+
+        // 2. Find and update all time entries associated with the old ID
+        const timeEntriesQuery = query(collection(db, "time_entries"), where("userId", "==", incorrectDocId));
+        const timeEntriesSnapshot = await getDocs(timeEntriesQuery);
+        timeEntriesSnapshot.forEach(entryDoc => {
+            batch.update(entryDoc.ref, { userId: correctUid });
+        });
+        console.log(`[AUTO-FIXING] Migrating ${timeEntriesSnapshot.size} time entries.`);
+
+        // 3. Find and update all audit logs associated with the old ID
+        const auditLogsQuery = query(collection(db, "audit_logs"), where("actorId", "==", incorrectDocId));
+        const auditLogsSnapshot = await getDocs(auditLogsQuery);
+        auditLogsSnapshot.forEach(logDoc => {
+            batch.update(logDoc.ref, { actorId: correctUid });
+        });
+        console.log(`[AUTO-FIXING] Migrating ${auditLogsSnapshot.size} audit logs.`);
+
+        // 4. Delete the old user document
+        const oldUserDocRef = doc(db, "users", incorrectDocId);
+        batch.delete(oldUserDocRef);
+
+        // 5. Commit all changes atomically
+        await batch.commit();
+
+        console.log(`[AUTO-FIXING] Data migration completed successfully for user ${authUser.email}.`);
+
+        // Return the corrected user profile, ensuring the ID is the new, correct UID
+        return { id: correctUid, ...userProfileData } as User;
+
+    } catch (error) {
+        console.error("[AUTO-FIXING] CRITICAL ERROR during data migration:", error);
+        // If migration fails, we can't proceed safely.
+        return null;
+    }
+  }, []);
+
   // Auth state listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user && user.email) {
-        // User is signed in, find their profile in Firestore
-        const usersRef = collection(db, "users");
-        const q = query(usersRef, where("email", "==", user.email));
-        const querySnapshot = await getDocs(q);
+        // Primary lookup: by UID (correct and efficient)
+        const userDocRef = doc(db, "users", user.uid);
+        const userDocSnap = await getDoc(userDocRef);
 
-        if (!querySnapshot.empty) {
-          const userDoc = querySnapshot.docs[0];
-          setCurrentUser({ id: userDoc.id, ...userDoc.data() } as User);
+        if (userDocSnap.exists()) {
+          setCurrentUser({ id: userDocSnap.id, ...userDocSnap.data() } as User);
         } else {
-            console.error("User profile not found in Firestore for email:", user.email);
-            setCurrentUser(null); // Or handle this case appropriately
+            // Fallback lookup: by email, with auto-fix
+            const usersQuery = query(collection(db, "users"), where("email", "==", user.email));
+            const querySnapshot = await getDocs(usersQuery);
+
+            if (!querySnapshot.empty) {
+                const userDocFromQuery = querySnapshot.docs[0];
+                const correctedUser = await autoFixUserInconsistency(user, userDocFromQuery);
+                if (correctedUser) {
+                    setCurrentUser(correctedUser);
+                } else {
+                    console.error("Auto-fix failed during session restoration. Signing out.");
+                    await signOut(auth);
+                    setCurrentUser(null);
+                }
+            } else {
+                // User profile truly not found
+                console.error(`User profile not found in Firestore for UID (${user.uid}) or email (${user.email}). Signing out to prevent inconsistent state.`);
+                await signOut(auth);
+                setCurrentUser(null);
+            }
         }
       } else {
         // User is signed out
@@ -109,7 +185,7 @@ function App() {
       setAuthLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [autoFixUserInconsistency]);
 
   // Firestore listeners for real-time data
   useEffect(() => {
@@ -154,8 +230,6 @@ function App() {
         let email: string;
         
         // 1. Determine the email to use for login.
-        // This is done before setting persistence because async Firestore calls should not
-        // be placed between setPersistence and signInWithEmailAndPassword.
         const usersRef = collection(db, "users");
         const querySnapshot = await getDocs(usersRef);
         const foundUser = querySnapshot.docs.find(doc => doc.data().name.toLowerCase() === nameOrEmail.toLowerCase());
@@ -163,34 +237,58 @@ function App() {
         if (foundUser) {
             email = foundUser.data().email;
         } else {
-            // If not found by name, assume the user entered their email directly.
             email = nameOrEmail;
         }
       
-        // 2. Set persistence immediately before signing in. This order is crucial.
+        // 2. Set persistence.
         const persistence = rememberMe ? browserLocalPersistence : browserSessionPersistence;
         await setPersistence(auth, persistence);
         
         // 3. Attempt to sign in
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      
-        // 4. On success, log the activity
         const user = userCredential.user;
-        if (user && user.email) {
-            const usersRef = collection(db, "users");
-            const q = query(usersRef, where("email", "==", user.email));
-            const querySnapshot = await getDocs(q);
-            if (!querySnapshot.empty) {
-                const userDoc = querySnapshot.docs[0];
-                const loggedInUser = { id: userDoc.id, ...userDoc.data() } as User;
-                await logActivity(loggedInUser, 'USER_LOGIN_SUCCESS', { email: loggedInUser.email });
+
+        // 4. VERIFY PROFILE (with auto-fix fallback)
+        const userDocRef = doc(db, "users", user.uid);
+        let userDocSnap = await getDoc(userDocRef);
+        let userProfileData: User | null = null;
+
+        if (userDocSnap.exists()) {
+            userProfileData = { id: userDocSnap.id, ...userDocSnap.data() } as User;
+        } else {
+            // Fallback lookup by email with auto-fix
+            if (user.email) {
+                const usersQuery = query(collection(db, "users"), where("email", "==", user.email));
+                const querySnapshotFallback = await getDocs(usersQuery);
+
+                if (!querySnapshotFallback.empty) {
+                    const userDocFromQuery = querySnapshotFallback.docs[0];
+                    const correctedUser = await autoFixUserInconsistency(user, userDocFromQuery);
+
+                    if (!correctedUser) {
+                        await signOut(auth);
+                        return { success: false, error: 'Falha na correção automática do perfil. Contate o suporte.' };
+                    }
+                    userProfileData = correctedUser;
+                }
             }
         }
+
+        if (!userProfileData) {
+            // Profile truly not found
+            console.error(`Login successful, but user profile not found in Firestore for UID: ${user.uid} or email: ${user.email}. Signing out.`);
+            await signOut(auth);
+            await logAnonymousActivity('USER_LOGIN_FAIL_NO_PROFILE', { attemptedIdentifier: nameOrEmail, uid: user.uid });
+            return { success: false, error: 'Autenticação bem-sucedida, mas o perfil não foi encontrado. Contate um administrador.' };
+        }
+      
+        // 5. On success, log the activity using the verified profile data.
+        await logActivity(userProfileData, 'USER_LOGIN_SUCCESS', { email: userProfileData.email });
 
         return { success: true };
 
     } catch (error: any) {
-        // 5. Unified error handling for the entire process
+        // 6. Unified error handling for the entire process
         console.error("Login process failed:", error);
         await logAnonymousActivity('USER_LOGIN_FAIL', { attemptedIdentifier: nameOrEmail, errorCode: error.code });
       
@@ -204,7 +302,7 @@ function App() {
         }
         return { success: false, error: message };
     }
-  }, [logActivity, logAnonymousActivity]);
+  }, [logActivity, logAnonymousActivity, autoFixUserInconsistency]);
 
   const handleLogout = useCallback(() => {
     if(currentUser) {
