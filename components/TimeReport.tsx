@@ -388,7 +388,62 @@ const TimeReport: React.FC<TimeReportProps> = ({ users, timeEntries, onUpdateTim
                 </div>
             </div>
             
-            <div className="overflow-x-auto mt-6">
+            {/* Mobile/Tablet View: Card List */}
+            <div className="lg:hidden space-y-4 mt-6">
+                {entriesWithAccumulatedBalance.map(entry => {
+                    const user = users.find(u => u.id === entry.userId);
+                    const balanceColor = entry.balance < 0 ? 'text-red-400' : 'text-green-400';
+                    const accumulatedBalanceColor = entry.accumulatedBalance < 0 ? 'text-red-400' : 'text-green-400';
+
+                    return (
+                        <div key={entry.id} className="bg-primary p-4 rounded-lg shadow">
+                            <div className="flex justify-between items-start mb-2">
+                                <div>
+                                    <h4 className="font-bold text-light">{user?.name || 'N/A'}</h4>
+                                    <p className="text-sm text-highlight">{entry.date}</p>
+                                </div>
+                                <button onClick={() => setEditingDay(entry)} className="text-highlight hover:text-light p-1 rounded-full hover:bg-accent transition">
+                                    <EditIcon />
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mb-3">
+                                <div><span className="text-highlight">Entrada:</span> <span className="text-light">{formatTime(entry.entrada)}</span></div>
+                                <div><span className="text-highlight">Saída:</span> <span className="text-light">{formatTime(entry.saida)}</span></div>
+                                <div><span className="text-highlight">In. Intervalo:</span> <span className="text-light">{formatTime(entry.inicioIntervalo)}</span></div>
+                                <div><span className="text-highlight">Fim Intervalo:</span> <span className="text-light">{formatTime(entry.fimIntervalo)}</span></div>
+                            </div>
+
+                            <div className="border-t border-accent pt-3 grid grid-cols-3 gap-2 text-center">
+                                <div>
+                                    <div className="text-xs text-highlight">Horas Trab.</div>
+                                    <div className="font-semibold text-light">{entry.workedHours.toFixed(2)}h</div>
+                                </div>
+                                <div>
+                                    <div className="text-xs text-highlight">Saldo Dia</div>
+                                    <div className={`font-semibold ${balanceColor}`}>{formatHours(entry.balance)}</div>
+                                </div>
+                                <div>
+                                    <div className="text-xs text-highlight">Saldo Acum.</div>
+                                    <div className={`font-bold ${accumulatedBalanceColor}`}>{formatHours(entry.accumulatedBalance)}</div>
+                                </div>
+                            </div>
+
+                            {entry.observation && (
+                                <div className="mt-3 text-sm border-t border-accent pt-2">
+                                    <p className="text-light text-xs italic truncate" title={entry.observation}><span className="text-highlight font-semibold">Obs:</span> {entry.observation}</p>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+                {filteredEntries.length === 0 && (
+                    <div className="px-6 py-10 text-center text-highlight">Nenhum registro encontrado para os filtros selecionados.</div>
+                )}
+            </div>
+
+            {/* Desktop View: Table */}
+            <div className="hidden lg:block overflow-x-auto mt-6">
               <table className="min-w-full divide-y divide-accent">
                 <thead className="bg-primary">
                   <tr>
@@ -447,7 +502,6 @@ const TimeReport: React.FC<TimeReportProps> = ({ users, timeEntries, onUpdateTim
                 </tfoot>
               </table>
             </div>
-
         </div>
 
         {editingDay && (

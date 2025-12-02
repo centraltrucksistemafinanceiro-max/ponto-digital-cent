@@ -571,11 +571,7 @@ function App() {
   }
 
   if (!currentUser) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-primary">
-        <Login onLogin={handleLogin} />
-      </div>
-    );
+    return <Login onLogin={handleLogin} />;
   }
 
   return (

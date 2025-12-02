@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { User, TimeEntry, TimeEntryType } from '../types';
 import { AppConfig } from '../App';
 import Modal from './Modal';
-import { EditIcon, ClockIcon, EyeIcon, EyeOffIcon } from './icons';
+import { EditIcon, ClockIcon, EyeIcon, EyeOffIcon, CalendarIcon } from './icons';
 
 interface EmployeeDashboardProps {
   user: User;
@@ -261,7 +261,52 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user, timeEntries
       
       <div className="bg-secondary p-4 sm:p-6 rounded-lg shadow-lg">
         <h2 className="text-2xl font-bold mb-4 text-light">Meus Registros</h2>
-        <div className="overflow-x-auto">
+        
+        {/* Mobile View: Card List */}
+        <div className="md:hidden space-y-4">
+          {processedDailyEntries.map(day => (
+            <div key={day.date} className="bg-primary p-4 rounded-lg shadow">
+              <div className="flex justify-between items-center mb-3">
+                <div className="flex items-center space-x-2">
+                    <CalendarIcon />
+                    <span className="font-bold text-light">{day.date}</span>
+                </div>
+                <button onClick={() => setEditingDay(day)} className="text-highlight hover:text-light p-1 rounded-full hover:bg-accent transition">
+                    <EditIcon />
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                <div><span className="text-highlight">Entrada:</span> <span className="text-light font-medium">{formatTime(day.entrada)}</span></div>
+                <div><span className="text-highlight">Saída:</span> <span className="text-light font-medium">{formatTime(day.saida)}</span></div>
+                <div><span className="text-highlight">In. Intervalo:</span> <span className="text-light font-medium">{formatTime(day.inicioIntervalo)}</span></div>
+                <div><span className="text-highlight">Fim Intervalo:</span> <span className="text-light font-medium">{formatTime(day.fimIntervalo)}</span></div>
+              </div>
+              <div className="border-t border-accent my-3"></div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                <div>
+                  <div className="text-highlight">Horas Trab.</div>
+                  <div className="text-light font-semibold">{day.workedHours.toFixed(2)}h</div>
+                </div>
+                <div>
+                  <div className="text-highlight">Status</div>
+                  <div className="text-light font-semibold">{day.status}</div>
+                </div>
+              </div>
+              {day.observation && (
+                <div className="mt-3 text-sm">
+                  <div className="text-highlight">Observação</div>
+                  <p className="text-light text-xs italic truncate" title={day.observation}>{day.observation}</p>
+                </div>
+              )}
+            </div>
+          ))}
+          {processedDailyEntries.length === 0 && (
+            <div className="px-6 py-10 text-center text-highlight">Nenhum registro encontrado.</div>
+          )}
+        </div>
+
+        {/* Desktop View: Table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="min-w-full divide-y divide-accent">
             <thead className="bg-primary">
               <tr>

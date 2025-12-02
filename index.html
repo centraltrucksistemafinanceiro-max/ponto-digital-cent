@@ -18,10 +18,33 @@
             'highlight': '#778DA9',
             'light': '#E0E1DD',
           },
+          keyframes: {
+            'fade-in': {
+              '0%': { opacity: '0', transform: 'translateY(-10px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' },
+            },
+            'shake': {
+                '0%, 100%': { transform: 'translateX(0)' },
+                '10%, 30%, 50%, 70%, 90%': { transform: 'translateX(-5px)' },
+                '20%, 40%, 60%, 80%': { transform: 'translateX(5px)' },
+            },
+          },
+          animation: {
+            'fade-in': 'fade-in 0.5s ease-out forwards',
+            'shake': 'shake 0.5s ease-in-out',
+          },
         },
       },
     }
   </script>
+  <style>
+    body {
+      background-color: #0D1B2A; /* primary color */
+      background-image: 
+        radial-gradient(circle at 15% 50%, rgba(65, 90, 119, 0.2) 0%, transparent 40%),
+        radial-gradient(circle at 85% 30%, rgba(27, 38, 59, 0.3) 0%, transparent 50%);
+    }
+  </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://unpkg.com/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -39,7 +62,7 @@
 }
 </script>
 </head>
-<body class="bg-primary text-light font-sans antialiased">
+<body class="text-light font-sans antialiased">
   <div id="root"></div>
   <script type="module" src="/index.tsx"></script>
 </body>

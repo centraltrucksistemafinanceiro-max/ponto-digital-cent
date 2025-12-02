@@ -114,7 +114,35 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onUpd
                   {notification.text}
               </div>
           )}
-          <div className="overflow-x-auto">
+          
+          {/* Mobile View: Card List */}
+          <div className="md:hidden space-y-3">
+            {users.map(user => (
+              <div key={user.id} className="bg-primary p-4 rounded-lg shadow">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-bold text-light">{user.name}</h3>
+                    <p className="text-sm text-highlight">{user.email}</p>
+                  </div>
+                  <div className="flex items-center space-x-3 flex-shrink-0">
+                    <button onClick={() => handleTriggerReset(user.email)} className="text-highlight hover:text-light" aria-label={`Redefinir senha de ${user.name}`}>
+                      <KeyIcon />
+                    </button>
+                    <button onClick={() => setEditingUser(user)} className="text-highlight hover:text-light" aria-label={`Editar ${user.name}`}>
+                      <EditIcon />
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-3 pt-3 border-t border-accent">
+                  <span className="text-sm text-highlight">Cargo: </span>
+                  <span className="text-sm font-semibold text-light">{user.role === Role.ADMIN ? 'Administrador' : 'Funcionário'}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop View: Table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="min-w-full divide-y divide-accent">
               <thead className="bg-primary">
                 <tr>
