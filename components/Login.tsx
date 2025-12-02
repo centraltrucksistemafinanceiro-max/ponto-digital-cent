@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { EyeIcon, EyeOffIcon, UserIcon, LockIcon, ClockGraphicIcon } from './icons';
 
 interface LoginProps {
@@ -13,10 +13,25 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    const savedUsername = localStorage.getItem('rememberedUsername');
+    if (savedUsername) {
+      setName(savedUsername);
+      setRememberMe(true);
+    }
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+
+    if (rememberMe) {
+      localStorage.setItem('rememberedUsername', name);
+    } else {
+      localStorage.removeItem('rememberedUsername');
+    }
+
     const result = await onLogin(name, password, rememberMe);
     if (!result.success) {
       setError(result.error || 'Nome de usuário ou senha inválidos.');
