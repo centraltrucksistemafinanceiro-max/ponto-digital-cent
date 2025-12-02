@@ -227,9 +227,12 @@ function App() {
 
   const handleLogin = useCallback(async (nameOrEmail: string, password: string, rememberMe: boolean): Promise<{success: boolean; error?: string}> => {
     try {
-        let email: string;
+        // 1. Set persistence FIRST. This is the most reliable way to ensure the setting is applied for the sign-in attempt.
+        const persistence = rememberMe ? browserLocalPersistence : browserSessionPersistence;
+        await setPersistence(auth, persistence);
         
-        // 1. Determine the email to use for login.
+        // 2. Determine the email to use for login.
+        let email: string;
         const usersRef = collection(db, "users");
         const querySnapshot = await getDocs(usersRef);
         const foundUser = querySnapshot.docs.find(doc => doc.data().name.toLowerCase() === nameOrEmail.toLowerCase());
@@ -240,10 +243,6 @@ function App() {
             email = nameOrEmail;
         }
       
-        // 2. Set persistence.
-        const persistence = rememberMe ? browserLocalPersistence : browserSessionPersistence;
-        await setPersistence(auth, persistence);
-        
         // 3. Attempt to sign in
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
