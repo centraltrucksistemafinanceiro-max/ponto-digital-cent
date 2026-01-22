@@ -56,6 +56,13 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user, timeEntries
   const [locationState, setLocationState] = useState<'checking' | 'allowed' | 'denied' | 'error'>('checking');
   const [locationError, setLocationError] = useState<string | null>(null);
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+  const [filters, setFilters] = useState(() => {
+    const today = new Date();
+    return {
+      month: today.getMonth(),
+      year: today.getFullYear()
+    };
+  });
 
   useEffect(() => {
     if (!navigator.geolocation) {
@@ -177,12 +184,17 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user, timeEntries
         };
     });
 
-    return processed.sort((a, b) => {
+    const filtered = processed.filter(entry => {
+        const entryDate = new Date(entry.originalEntries[0].timestamp);
+        return entryDate.getMonth() === filters.month && entryDate.getFullYear() === filters.year;
+    });
+
+    return filtered.sort((a, b) => {
         const dateA = new Date(a.date.split('/').reverse().join('-'));
         const dateB = new Date(b.date.split('/').reverse().join('-'));
         return dateB.getTime() - dateA.getTime();
     });
-  }, [timeEntries, appConfig.workdayHours]);
+  }, [timeEntries, appConfig.workdayHours, filters]);
 
   const totalWorkedHours = useMemo(() => {
     return processedDailyEntries.reduce((acc, curr) => acc + curr.workedHours, 0);
@@ -260,7 +272,29 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user, timeEntries
       </div>
       
       <div className="bg-secondary p-4 sm:p-6 rounded-lg shadow-lg">
-        <h2 className="text-2xl font-bold mb-4 text-light">Meus Registros</h2>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+            <h2 className="text-2xl font-bold text-light">Meus Registros</h2>
+            <div className="flex space-x-2">
+                <select 
+                    value={filters.month} 
+                    onChange={(e) => setFilters(f => ({ ...f, month: parseInt(e.target.value) }))}
+                    className="bg-primary border border-accent rounded-md px-3 py-1.5 text-light text-sm focus:ring-highlight focus:border-highlight"
+                >
+                    {['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].map((m, i) => (
+                        <option key={i} value={i}>{m}</option>
+                    ))}
+                </select>
+                <select 
+                    value={filters.year} 
+                    onChange={(e) => setFilters(f => ({ ...f, year: parseInt(e.target.value) }))}
+                    className="bg-primary border border-accent rounded-md px-3 py-1.5 text-light text-sm focus:ring-highlight focus:border-highlight"
+                >
+                    {[2024, 2025, 2026].map(y => (
+                        <option key={y} value={y}>{y}</option>
+                    ))}
+                </select>
+            </div>
+        </div>
         
         {/* Mobile View: Card List */}
         <div className="md:hidden space-y-4">

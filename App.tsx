@@ -57,6 +57,29 @@ function App() {
     radius: 10,
     workdayHours: 8,
   });
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
+  };
 
   const logActivity = useCallback(async (actor: User | null, action: string, details: Record<string, any> = {}) => {
     if (!actor) {
@@ -583,7 +606,12 @@ function App() {
 
   return (
     <div className="min-h-screen bg-primary">
-      <Header user={currentUser} onLogout={handleLogout} className="print:hidden" />
+      <Header 
+        user={currentUser} 
+        onLogout={handleLogout} 
+        onInstall={deferredPrompt ? handleInstallClick : undefined}
+        className="print:hidden" 
+      />
       <main className="p-4 sm:p-6 lg:p-8">
         {currentUser.role === Role.ADMIN ? (
           <AdminDashboard 

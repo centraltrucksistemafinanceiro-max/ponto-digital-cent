@@ -1,15 +1,16 @@
 
 import React from 'react';
 import { User } from '../types';
-import { LogoutIcon } from './icons';
+import { LogoutIcon, DownloadIcon } from './icons';
 
 interface HeaderProps {
   user: User;
   onLogout: () => void;
+  onInstall?: () => void;
   className?: string;
 }
 
-const Header: React.FC<HeaderProps> = ({ user, onLogout, className }) => {
+const Header: React.FC<HeaderProps> = ({ user, onLogout, onInstall, className }) => {
   return (
     <header className={`bg-secondary shadow-md ${className || ''}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -17,8 +18,18 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout, className }) => {
           <div className="flex items-center">
             <h1 className="text-2xl font-bold text-light">Ponto Digital</h1>
           </div>
-          <div className="flex items-center space-x-4">
-            <span className="text-highlight">
+          <div className="flex items-center space-x-2 sm:space-x-4">
+            {onInstall && (
+               <button
+                 onClick={onInstall}
+                 className="flex items-center space-x-1 sm:space-x-2 bg-accent/20 text-light hover:bg-accent/40 transition-colors duration-150 py-1.5 px-3 rounded-full border border-accent/50 group"
+                 aria-label="Instalar aplicativo"
+               >
+                 <DownloadIcon />
+                 <span className="text-xs sm:text-sm font-medium">Instalar App</span>
+               </button>
+            )}
+            <span className="text-highlight hidden xs:inline">
               Olá, <span className="font-medium text-light">{user.name}</span>
             </span>
             <button
