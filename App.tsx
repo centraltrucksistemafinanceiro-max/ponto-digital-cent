@@ -280,6 +280,12 @@ function App() {
             await logAnonymousActivity('USER_LOGIN_FAIL_NO_PROFILE', { attemptedIdentifier: nameOrEmail, uid: user.uid });
             return { success: false, error: 'Autenticação bem-sucedida, mas o perfil não foi encontrado. Contate um administrador.' };
         }
+
+        if (userProfileData.isActive === false) {
+            await signOut(auth);
+            await logAnonymousActivity('USER_LOGIN_FAIL_INACTIVE', { attemptedIdentifier: nameOrEmail, uid: user.uid });
+            return { success: false, error: 'Sua conta está inativa. Entre em contato com o administrador.' };
+        }
       
         // 5. On success, log the activity using the verified profile data.
         await logActivity(userProfileData, 'USER_LOGIN_SUCCESS', { email: userProfileData.email });
@@ -383,7 +389,8 @@ function App() {
         await setDoc(doc(db, 'users', newAuthUser.uid), {
             name: user.name,
             email: user.email,
-            role: user.role
+            role: user.role,
+            isActive: true
         });
 
         await logActivity(currentUser, 'CREATE_USER', {

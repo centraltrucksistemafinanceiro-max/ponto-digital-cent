@@ -133,9 +133,14 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onUpd
                     </button>
                   </div>
                 </div>
-                <div className="mt-3 pt-3 border-t border-accent">
-                  <span className="text-sm text-highlight">Cargo: </span>
-                  <span className="text-sm font-semibold text-light">{user.role === Role.ADMIN ? 'Administrador' : 'Funcionário'}</span>
+                <div className="mt-3 pt-3 border-t border-accent flex justify-between items-center">
+                  <div>
+                    <span className="text-sm text-highlight">Cargo: </span>
+                    <span className="text-sm font-semibold text-light">{user.role === Role.ADMIN ? 'Administrador' : 'Funcionário'}</span>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${user.isActive === false ? 'bg-red-900 text-red-200' : 'bg-green-900 text-green-200'}`}>
+                    {user.isActive === false ? 'Inativo' : 'Ativo'}
+                  </span>
                 </div>
               </div>
             ))}
@@ -148,8 +153,9 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onUpd
                 <tr>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-highlight uppercase tracking-wider">Nome</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-highlight uppercase tracking-wider">E-mail</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-highlight uppercase tracking-wider">Cargo</th>
-                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-highlight uppercase tracking-wider">Ações</th>
+                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-highlight uppercase tracking-wider">Cargo</th>
+                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-highlight uppercase tracking-wider">Status</th>
+                   <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-highlight uppercase tracking-wider">Ações</th>
                 </tr>
               </thead>
               <tbody className="bg-secondary divide-y divide-accent">
@@ -157,9 +163,14 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onUpd
                   <tr key={user.id}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-light">{user.name}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-light">{user.email}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-light">
-                        {user.role === Role.ADMIN ? 'Administrador' : 'Funcionário'}
-                    </td>
+                     <td className="px-6 py-4 whitespace-nowrap text-sm text-light">
+                         {user.role === Role.ADMIN ? 'Administrador' : 'Funcionário'}
+                     </td>
+                     <td className="px-6 py-4 whitespace-nowrap text-sm text-light">
+                       <span className={`px-2 py-1 rounded-full text-xs font-bold ${user.isActive === false ? 'bg-red-900 text-red-200' : 'bg-green-900 text-green-200'}`}>
+                         {user.isActive === false ? 'Inativo' : 'Ativo'}
+                       </span>
+                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-right space-x-4">
                         <button onClick={() => handleTriggerReset(user.email)} className="text-highlight hover:text-light" aria-label={`Redefinir senha de ${user.name}`}>
                             <KeyIcon />
@@ -198,6 +209,7 @@ interface EditUserModalProps {
 const EditUserModal: React.FC<EditUserModalProps> = ({ user, onClose, onSave, onTriggerPasswordReset }) => {
     const [name, setName] = useState(user.name);
     const [role, setRole] = useState(user.role);
+    const [isActive, setIsActive] = useState(user.isActive !== false);
     const [status, setStatus] = useState<{ type: 'success' | 'error', text: string } | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     
@@ -206,7 +218,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ user, onClose, onSave, on
         setIsProcessing(true);
         
         // Create a new object for the updated user to ensure reactivity
-        const updatedUser = { ...user, name, role };
+        const updatedUser = { ...user, name, role, isActive };
         // FIX: The prop is `onSave`, not `onUpdateUser`. This was causing an error.
         onSave(updatedUser);
         
@@ -263,6 +275,16 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ user, onClose, onSave, on
                         <option value={Role.EMPLOYEE}>Funcionário</option>
                         <option value={Role.ADMIN}>Administrador</option>
                     </select>
+                 </div>
+                 <div className="flex items-center space-x-3 p-3 bg-primary rounded-md border border-accent">
+                    <input
+                        type="checkbox"
+                        id="edit-user-active"
+                        checked={isActive}
+                        onChange={(e) => setIsActive(e.target.checked)}
+                        className="h-4 w-4 text-highlight bg-secondary border-accent rounded focus:ring-highlight"
+                    />
+                    <label htmlFor="edit-user-active" className="text-sm font-medium text-light">Conta Ativa (pode fazer login)</label>
                 </div>
             </div>
 

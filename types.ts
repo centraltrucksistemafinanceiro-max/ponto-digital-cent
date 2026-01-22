@@ -9,6 +9,7 @@ export interface User {
   name: string;
   email: string;
   role: Role;
+  isActive?: boolean;
 }
 
 export enum TimeEntryType {

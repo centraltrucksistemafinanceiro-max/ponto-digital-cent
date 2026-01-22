@@ -56,11 +56,24 @@ const isSameDay = (d1: Date, d2: Date) => {
 
 const TimeReport: React.FC<TimeReportProps> = ({ users, timeEntries, onUpdateTimeEntry, onDeleteTimeEntry, onAddTimeEntry, workdayHours }) => {
   const [editingDay, setEditingDay] = useState<ProcessedEntry | null>(null);
-  const [filters, setFilters] = useState({
-    userId: 'all',
-    reportType: 'daily',
-    startDate: '',
-    endDate: '',
+  const [filters, setFilters] = useState(() => {
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    
+    const formatDate = (date: Date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    return {
+      userId: 'all',
+      reportType: 'daily',
+      startDate: formatDate(firstDay),
+      endDate: formatDate(lastDay),
+    };
   });
 
   const processedEntries = useMemo(() => {
