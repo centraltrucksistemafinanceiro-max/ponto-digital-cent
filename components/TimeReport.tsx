@@ -79,16 +79,24 @@ const TimeReport: React.FC<TimeReportProps> = ({ users, timeEntries, onUpdateTim
   const processedEntries = useMemo(() => {
     const groupedByDay: { [key: string]: { userId: string; date: string; entries: TimeEntry[] } } = {};
 
+    const formatDateKey = (date: Date) => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
+
     timeEntries.forEach(entry => {
-      const dateKey = `${entry.userId}-${entry.timestamp.toLocaleDateString('pt-BR')}`;
-      if (!groupedByDay[dateKey]) {
-        groupedByDay[dateKey] = {
+      const dateStr = formatDateKey(entry.timestamp);
+      const dayKey = `${entry.userId}-${dateStr}`;
+      if (!groupedByDay[dayKey]) {
+        groupedByDay[dayKey] = {
           userId: entry.userId,
-          date: entry.timestamp.toLocaleDateString('pt-BR'),
+          date: dateStr,
           entries: [],
         };
       }
-      groupedByDay[dateKey].entries.push(entry);
+      groupedByDay[dayKey].entries.push(entry);
     });
 
     return Object.values(groupedByDay).map((dayGroup): ProcessedEntry => {
@@ -153,10 +161,13 @@ const TimeReport: React.FC<TimeReportProps> = ({ users, timeEntries, onUpdateTim
       }
 
 
+      const [y, m, d] = dayGroup.date.split('-').map(Number);
+      const displayDate = `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`;
+
       return {
         id: `${dayGroup.userId}-${dayGroup.date}`,
         userId: dayGroup.userId,
-        date: dayGroup.date,
+        date: displayDate,
         entrada: entrada?.timestamp,
         inicioIntervalo: inicioIntervalo?.timestamp,
         fimIntervalo: fimIntervalo?.timestamp,
@@ -169,7 +180,11 @@ const TimeReport: React.FC<TimeReportProps> = ({ users, timeEntries, onUpdateTim
         tags
       };
     })
-    .sort((a, b) => new Date(b.date.split('/').reverse().join('-')).getTime() - new Date(a.date.split('/').reverse().join('-')).getTime());
+    .sort((a, b) => {
+        const dateA = new Date(a.date.split('/').reverse().join('-'));
+        const dateB = new Date(b.date.split('/').reverse().join('-'));
+        return dateB.getTime() - dateA.getTime();
+    });
   }, [timeEntries, workdayHours]);
 
   useEffect(() => {

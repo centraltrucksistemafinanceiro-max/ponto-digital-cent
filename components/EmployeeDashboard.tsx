@@ -138,15 +138,22 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user, timeEntries
   const processedDailyEntries: ProcessedDayEntry[] = useMemo(() => {
     const groupedByDay: { [key: string]: TimeEntry[] } = {};
 
+    const formatDateKey = (date: Date) => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    };
+
     timeEntries.forEach(entry => {
-      const dateKey = entry.timestamp.toLocaleDateString('pt-BR');
+      const dateKey = formatDateKey(entry.timestamp);
       if (!groupedByDay[dateKey]) {
         groupedByDay[dateKey] = [];
       }
       groupedByDay[dateKey].push(entry);
     });
 
-    const processed = Object.values(groupedByDay).map(dayEntries => {
+    const processed = Object.entries(groupedByDay).map(([dateKey, dayEntries]) => {
         const sortedEntries = dayEntries.sort((a,b) => a.timestamp.getTime() - b.timestamp.getTime());
         
         const entrada = sortedEntries.find(e => e.type === TimeEntryType.ENTRADA);
@@ -169,9 +176,12 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user, timeEntries
 
         const status = (entrada && saida) ? "Completo" : "Incompleto";
         const observation = sortedEntries.map(e => e.observation).filter(Boolean).join('; ');
+        
+        const [y, m, d] = dateKey.split('-').map(Number);
+        const displayDate = `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`;
 
         return {
-            date: sortedEntries[0].timestamp.toLocaleDateString('pt-BR'),
+            date: displayDate,
             entrada: entrada?.timestamp,
             inicioIntervalo: inicioIntervalo?.timestamp,
             fimIntervalo: fimIntervalo?.timestamp,
@@ -185,8 +195,8 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user, timeEntries
     });
 
     const filtered = processed.filter(entry => {
-        const entryDate = new Date(entry.originalEntries[0].timestamp);
-        return entryDate.getMonth() === filters.month && entryDate.getFullYear() === filters.year;
+        const [d, m, y] = entry.date.split('/').map(Number);
+        return (m - 1) === filters.month && y === filters.year;
     });
 
     return filtered.sort((a, b) => {
