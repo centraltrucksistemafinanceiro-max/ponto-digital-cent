@@ -1,0 +1,17 @@
+{
+  "name": "Ponto Digital Central Truck",
+  "short_name": "Ponto Digital",
+  "description": "Sistema de registro de ponto digital com geolocalização.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0D1B2A",
+  "theme_color": "#0D1B2A",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
