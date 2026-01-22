@@ -138,9 +138,16 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onUpd
                     <span className="text-sm text-highlight">Cargo: </span>
                     <span className="text-sm font-semibold text-light">{user.role === Role.ADMIN ? 'Administrador' : 'Funcionário'}</span>
                   </div>
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${user.isActive === false ? 'bg-red-900 text-red-200' : 'bg-green-900 text-green-200'}`}>
-                    {user.isActive === false ? 'Inativo' : 'Ativo'}
-                  </span>
+                  <div className="flex flex-col items-end space-y-1">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${user.isActive === false ? 'bg-red-900 text-red-200' : 'bg-green-900 text-green-200'}`}>
+                      {user.isActive === false ? 'Inativo' : 'Ativo'}
+                    </span>
+                    {user.vacationStart && user.vacationEnd && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-900 text-blue-200">
+                        Em Férias
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -167,9 +174,16 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onUpd
                          {user.role === Role.ADMIN ? 'Administrador' : 'Funcionário'}
                      </td>
                      <td className="px-6 py-4 whitespace-nowrap text-sm text-light">
-                       <span className={`px-2 py-1 rounded-full text-xs font-bold ${user.isActive === false ? 'bg-red-900 text-red-200' : 'bg-green-900 text-green-200'}`}>
-                         {user.isActive === false ? 'Inativo' : 'Ativo'}
-                       </span>
+                      <div className="flex flex-col space-y-1">
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold inline-block w-fit ${user.isActive === false ? 'bg-red-900 text-red-200' : 'bg-green-900 text-green-200'}`}>
+                          {user.isActive === false ? 'Inativo' : 'Ativo'}
+                        </span>
+                        {user.vacationStart && user.vacationEnd && (
+                          <span className="px-2 py-1 rounded-full text-xs font-bold inline-block w-fit bg-blue-900 text-blue-200">
+                            Férias
+                          </span>
+                        )}
+                      </div>
                      </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-right space-x-4">
                         <button onClick={() => handleTriggerReset(user.email)} className="text-highlight hover:text-light" aria-label={`Redefinir senha de ${user.name}`}>
@@ -210,6 +224,8 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ user, onClose, onSave, on
     const [name, setName] = useState(user.name);
     const [role, setRole] = useState(user.role);
     const [isActive, setIsActive] = useState(user.isActive !== false);
+    const [vacationStart, setVacationStart] = useState(user.vacationStart || '');
+    const [vacationEnd, setVacationEnd] = useState(user.vacationEnd || '');
     const [status, setStatus] = useState<{ type: 'success' | 'error', text: string } | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     
@@ -218,7 +234,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ user, onClose, onSave, on
         setIsProcessing(true);
         
         // Create a new object for the updated user to ensure reactivity
-        const updatedUser = { ...user, name, role, isActive };
+        const updatedUser = { ...user, name, role, isActive, vacationStart, vacationEnd };
         // FIX: The prop is `onSave`, not `onUpdateUser`. This was causing an error.
         onSave(updatedUser);
         
@@ -284,7 +300,42 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ user, onClose, onSave, on
                         onChange={(e) => setIsActive(e.target.checked)}
                         className="h-4 w-4 text-highlight bg-secondary border-accent rounded focus:ring-highlight"
                     />
-                    <label htmlFor="edit-user-active" className="text-sm font-medium text-light">Conta Ativa (pode fazer login)</label>
+                     <label htmlFor="edit-user-active" className="text-sm font-medium text-light">Conta Ativa (pode fazer login)</label>
+                </div>
+
+                <div className="border-t border-accent pt-4">
+                    <h4 className="text-sm font-semibold text-highlight mb-3">Período de Férias</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="vacation-start" className="block text-xs font-medium text-highlight">Início</label>
+                            <input
+                                type="date"
+                                id="vacation-start"
+                                value={vacationStart}
+                                onChange={(e) => setVacationStart(e.target.value)}
+                                className="mt-1 block w-full bg-primary border border-accent rounded-md shadow-sm py-2 px-3 text-light focus:outline-none focus:ring-highlight focus:border-highlight sm:text-sm"
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="vacation-end" className="block text-xs font-medium text-highlight">Fim</label>
+                            <input
+                                type="date"
+                                id="vacation-end"
+                                value={vacationEnd}
+                                onChange={(e) => setVacationEnd(e.target.value)}
+                                className="mt-1 block w-full bg-primary border border-accent rounded-md shadow-sm py-2 px-3 text-light focus:outline-none focus:ring-highlight focus:border-highlight sm:text-sm"
+                            />
+                        </div>
+                    </div>
+                    {vacationStart && vacationEnd && (
+                        <button 
+                            type="button"
+                            onClick={() => { setVacationStart(''); setVacationEnd(''); }}
+                            className="mt-2 text-xs text-red-400 hover:text-red-300 transition-colors"
+                        >
+                            Limpar período de férias
+                        </button>
+                    )}
                 </div>
             </div>
 

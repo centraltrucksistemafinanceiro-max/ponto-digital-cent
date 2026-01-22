@@ -10,6 +10,8 @@ export interface User {
   email: string;
   role: Role;
   isActive?: boolean;
+  vacationStart?: string; // ISO date string (YYYY-MM-DD)
+  vacationEnd?: string;   // ISO date string (YYYY-MM-DD)
 }
 
 export enum TimeEntryType {
@@ -17,6 +19,7 @@ export enum TimeEntryType {
   INICIO_INTERVALO = 'Início Intervalo',
   FIM_INTERVALO = 'Fim Intervalo',
   SAIDA = 'Saída',
+  FERIAS = 'Férias',
 }
 
 export interface TimeEntry {

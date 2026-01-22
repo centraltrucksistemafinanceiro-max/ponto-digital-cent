@@ -98,6 +98,20 @@ const TimeReport: React.FC<TimeReportProps> = ({ users, timeEntries, onUpdateTim
       const inicioIntervalo = sortedEntries.find(e => e.type === TimeEntryType.INICIO_INTERVALO);
       const fimIntervalo = sortedEntries.find(e => e.type === TimeEntryType.FIM_INTERVALO);
       const saida = sortedEntries.find(e => e.type === TimeEntryType.SAIDA);
+      const feriasManual = sortedEntries.find(e => e.type === TimeEntryType.FERIAS);
+
+      // Check if user is on vacation according to their profile
+      const user = users.find(u => u.id === dayGroup.userId);
+      const entryDate = new Date(dayGroup.date.split('/').reverse().join('-'));
+      
+      let isVacation = !!feriasManual;
+      if (user?.vacationStart && user?.vacationEnd) {
+          const vStart = new Date(user.vacationStart);
+          const vEnd = new Date(user.vacationEnd);
+          if (entryDate >= vStart && entryDate <= vEnd) {
+              isVacation = true;
+          }
+      }
       
       let workedMillis = 0;
       if (entrada && saida) {
@@ -110,13 +124,23 @@ const TimeReport: React.FC<TimeReportProps> = ({ users, timeEntries, onUpdateTim
       }
       
       const workedHours = workedMillis > 0 ? (workedMillis / (1000 * 60 * 60)) : 0;
-      const balance = (entrada && saida) ? workedHours - workdayHours : 0;
       
-      const status = (entrada && saida) ? "Completo" : "Incompleto";
+      // Calculate balance: if vacation, balance is 0 unless worked (then it's all extra)
+      // Actually, usually on vacation you don't lose hours. 
+      // If it's a vacation day, we treat it as if target was 0.
+      const targetHours = isVacation ? 0 : workdayHours;
+      const balance = (entrada && saida) ? workedHours - targetHours : (isVacation ? 0 : 0);
+      
+      const status = isVacation ? "Férias" : ((entrada && saida) ? "Completo" : "Incompleto");
       const observation = sortedEntries.map(e => e.observation).filter(Boolean).join('; ');
 
       const tags: {text: string, color: string}[] = [];
-      if (status === 'Completo') {
+      if (isVacation) {
+        tags.push({text: 'Férias', color: 'bg-blue-600'});
+        if (workedHours > 0) {
+            tags.push({text: 'Trabalho em Férias', color: 'bg-purple-600'});
+        }
+      } else if (status === 'Completo') {
         tags.push({text: 'Completo', color: 'bg-green-600'});
         if (workedHours > (workdayHours + 0.5)) { // 0.5 for tolerance
             tags.push({text: 'Hora Extra', color: 'bg-blue-600'});
