@@ -107,6 +107,7 @@ const TimeReport: React.FC<TimeReportProps> = ({ users, timeEntries, onUpdateTim
       const fimIntervalo = sortedEntries.find(e => e.type === TimeEntryType.FIM_INTERVALO);
       const saida = sortedEntries.find(e => e.type === TimeEntryType.SAIDA);
       const feriasManual = sortedEntries.find(e => e.type === TimeEntryType.FERIAS);
+      const atestadoManual = sortedEntries.find(e => e.type === TimeEntryType.ATESTADO);
 
       // Check if user is on vacation according to their profile
       const user = users.find(u => u.id === dayGroup.userId);
@@ -120,6 +121,8 @@ const TimeReport: React.FC<TimeReportProps> = ({ users, timeEntries, onUpdateTim
               isVacation = true;
           }
       }
+      
+      let isAtestado = !!atestadoManual;
       
       let workedMillis = 0;
       if (entrada && saida) {
@@ -135,19 +138,22 @@ const TimeReport: React.FC<TimeReportProps> = ({ users, timeEntries, onUpdateTim
       
       // Calculate balance: if vacation, balance is 0 unless worked (then it's all extra)
       // Actually, usually on vacation you don't lose hours. 
-      // If it's a vacation day, we treat it as if target was 0.
-      const targetHours = isVacation ? 0 : workdayHours;
-      const balance = (entrada && saida) ? workedHours - targetHours : (isVacation ? 0 : 0);
+      // If it's a vacation or medical certificate day, we treat it as if target was 0.
+      const targetHours = (isVacation || isAtestado) ? 0 : workdayHours;
+      const balance = (entrada && saida) ? workedHours - targetHours : (isVacation || isAtestado ? 0 : 0);
       
-      const status = isVacation ? "Férias" : ((entrada && saida) ? "Completo" : "Incompleto");
+      const status = isVacation ? "Férias" : (isAtestado ? "Atestado" : ((entrada && saida) ? "Completo" : "Incompleto"));
       const observation = sortedEntries.map(e => e.observation).filter(Boolean).join('; ');
 
       const tags: {text: string, color: string}[] = [];
       if (isVacation) {
         tags.push({text: 'Férias', color: 'bg-blue-600'});
-        if (workedHours > 0) {
-            tags.push({text: 'Trabalho em Férias', color: 'bg-purple-600'});
-        }
+      } else if (isAtestado) {
+        tags.push({text: 'Atestado', color: 'bg-amber-600'});
+      }
+      
+      if (workedHours > 0 && (isVacation || isAtestado)) {
+          tags.push({text: workedHours > 0 ? 'Trabalho Extra' : '', color: 'bg-purple-600'});
       } else if (status === 'Completo') {
         tags.push({text: 'Completo', color: 'bg-green-600'});
         if (workedHours > (workdayHours + 0.5)) { // 0.5 for tolerance
@@ -156,7 +162,7 @@ const TimeReport: React.FC<TimeReportProps> = ({ users, timeEntries, onUpdateTim
         if (entrada && entrada.timestamp.getHours() >= 9) {
             tags.push({text: 'Atraso', color: 'bg-red-600'});
         }
-      } else {
+      } else if (!isVacation && !isAtestado) {
         tags.push({text: 'Incompleto', color: 'bg-yellow-600'});
       }
 
@@ -252,7 +258,7 @@ const TimeReport: React.FC<TimeReportProps> = ({ users, timeEntries, onUpdateTim
     const totalHoursMonth = currentMonthEntries.reduce((acc, curr) => acc + curr.workedHours, 0);
     const totalBalance = processedEntries.reduce((acc, curr) => acc + curr.balance, 0);
     const overtime = currentMonthEntries.reduce((acc, curr) => acc + (curr.workedHours > workdayHours ? curr.workedHours - workdayHours : 0), 0);
-    const lateness = currentMonthEntries.filter(e => e.entrada && e.entrada.getHours() >= 9).length;
+    const lateness = currentMonthEntries.filter(e => e.status !== "Férias" && e.status !== "Atestado" && e.entrada && e.entrada.getHours() >= 9).length;
 
     const today = new Date();
     const entriesToday = timeEntries.filter(entry => isSameDay(entry.timestamp, today));

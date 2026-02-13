@@ -194,6 +194,21 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user, timeEntries
         const fimIntervalo = sortedEntries.find(e => e.type === TimeEntryType.FIM_INTERVALO);
         const saida = sortedEntries.find(e => e.type === TimeEntryType.SAIDA);
         
+        const feriasManual = sortedEntries.find(e => e.type === TimeEntryType.FERIAS);
+        const atestadoManual = sortedEntries.find(e => e.type === TimeEntryType.ATESTADO);
+
+        const entryDate = new Date(dateKey);
+        let isVacation = !!feriasManual;
+        if (user?.vacationStart && user?.vacationEnd) {
+            const vStart = new Date(user.vacationStart);
+            const vEnd = new Date(user.vacationEnd);
+            if (entryDate >= vStart && entryDate <= vEnd) {
+                isVacation = true;
+            }
+        }
+
+        let isAtestado = !!atestadoManual;
+        
         let workedMillis = 0;
         if (entrada && saida) {
             const totalMillis = saida.timestamp.getTime() - entrada.timestamp.getTime();
@@ -205,9 +220,10 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user, timeEntries
         }
         
         const workedHours = workedMillis > 0 ? (workedMillis / (1000 * 60 * 60)) : 0;
-        const balance = (entrada && saida) ? workedHours - appConfig.workdayHours : 0;
+        const targetHours = (isVacation || isAtestado) ? 0 : appConfig.workdayHours;
+        const balance = (entrada && saida) ? workedHours - targetHours : (isVacation || isAtestado ? 0 : 0);
 
-        const status = (entrada && saida) ? "Completo" : "Incompleto";
+        const status = isVacation ? "Férias" : (isAtestado ? "Atestado" : ((entrada && saida) ? "Completo" : "Incompleto"));
         const observation = sortedEntries.map(e => e.observation).filter(Boolean).join('; ');
         
         const [y, m, d] = dateKey.split('-').map(Number);

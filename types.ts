@@ -20,6 +20,7 @@ export enum TimeEntryType {
   FIM_INTERVALO = 'Fim Intervalo',
   SAIDA = 'Saída',
   FERIAS = 'Férias',
+  ATESTADO = 'Atestado',
 }
 
 export interface TimeEntry {
