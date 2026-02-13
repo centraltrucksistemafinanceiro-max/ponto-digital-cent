@@ -56,6 +56,7 @@ const isSameDay = (d1: Date, d2: Date) => {
 
 const TimeReport: React.FC<TimeReportProps> = ({ users, timeEntries, onUpdateTimeEntry, onDeleteTimeEntry, onAddTimeEntry, workdayHours }) => {
   const [editingDay, setEditingDay] = useState<ProcessedEntry | null>(null);
+  const [isManualEntryOpen, setIsManualEntryOpen] = useState(false);
   const [filters, setFilters] = useState(() => {
     const today = new Date();
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -416,6 +417,7 @@ const TimeReport: React.FC<TimeReportProps> = ({ users, timeEntries, onUpdateTim
                     <p className="text-sm text-highlight">Visualize e gerencie os registros de ponto dos funcionários.</p>
                 </div>
                 <div className="flex flex-wrap gap-2 mt-4 md:mt-0">
+                    <button onClick={() => setIsManualEntryOpen(true)} className="flex items-center bg-accent hover:bg-highlight text-white text-sm font-medium py-2 px-3 rounded-md transition"><PlusCircleIcon/> <span className="hidden sm:inline ml-1">Lançar Ponto/Atestado</span></button>
                     <button onClick={() => window.print()} className="flex items-center bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium py-2 px-3 rounded-md transition"><PrintIcon/> <span className="hidden sm:inline ml-1">Imprimir</span></button>
                     <button onClick={handleExportExcel} className="flex items-center bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-2 px-3 rounded-md transition"><ExcelIcon/> <span className="hidden sm:inline ml-1">Excel</span></button>
                     <button onClick={handleExportPdf} className="flex items-center bg-yellow-600 hover:bg-yellow-700 text-white text-sm font-medium py-2 px-3 rounded-md transition"><PdfIcon/> <span className="hidden sm:inline ml-1">PDF</span></button>
@@ -568,6 +570,14 @@ const TimeReport: React.FC<TimeReportProps> = ({ users, timeEntries, onUpdateTim
                 onClose={() => setEditingDay(null)} 
                 onSave={onUpdateTimeEntry}
                 onDelete={onDeleteTimeEntry}
+                onAdd={onAddTimeEntry}
+            />
+        )}
+
+        {isManualEntryOpen && (
+            <ManualEntryModal 
+                users={users}
+                onClose={() => setIsManualEntryOpen(false)}
                 onAdd={onAddTimeEntry}
             />
         )}
@@ -749,6 +759,103 @@ const EditDayModal: React.FC<EditDayModalProps> = ({ day, onClose, onSave, onDel
                     Salvar Alterações
                 </button>
             </div>
+        </Modal>
+    );
+}
+
+interface ManualEntryModalProps {
+    users: User[];
+    onClose: () => void;
+    onAdd: (entry: Omit<TimeEntry, 'id'>) => void;
+}
+
+const ManualEntryModal: React.FC<ManualEntryModalProps> = ({ users, onClose, onAdd }) => {
+    const [formData, setFormData] = useState({
+        userId: users[0]?.id || '',
+        date: new Date().toISOString().slice(0, 10),
+        time: '08:00',
+        type: TimeEntryType.ATESTADO,
+        observation: '',
+    });
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const [year, month, day] = formData.date.split('-').map(Number);
+        const [hours, minutes] = formData.time.split(':').map(Number);
+        
+        const timestamp = new Date(year, month - 1, day, hours, minutes);
+
+        onAdd({
+            userId: formData.userId,
+            timestamp,
+            type: formData.type,
+            observation: formData.observation,
+        });
+        onClose();
+    };
+
+    return (
+        <Modal isOpen={true} onClose={onClose} title="Lançar Registro Manual">
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                    <label className="block text-sm font-medium text-highlight mb-1">Funcionário</label>
+                    <select 
+                        value={formData.userId}
+                        onChange={(e) => setFormData({...formData, userId: e.target.value})}
+                        className="w-full bg-primary border border-accent rounded-md px-3 py-2 text-light focus:ring-highlight focus:border-highlight"
+                        required
+                    >
+                        <option value="" disabled>Selecione um funcionário</option>
+                        {users.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
+                    </select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-highlight mb-1">Data</label>
+                        <input 
+                            type="date" 
+                            value={formData.date}
+                            onChange={(e) => setFormData({...formData, date: e.target.value})}
+                            className="w-full bg-primary border border-accent rounded-md px-3 py-2 text-light focus:ring-highlight focus:border-highlight"
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-highlight mb-1">Hora</label>
+                        <input 
+                            type="time" 
+                            value={formData.time}
+                            onChange={(e) => setFormData({...formData, time: e.target.value})}
+                            className="w-full bg-primary border border-accent rounded-md px-3 py-2 text-light focus:ring-highlight focus:border-highlight"
+                            required
+                        />
+                    </div>
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-highlight mb-1">Tipo de Registro</label>
+                    <select 
+                        value={formData.type}
+                        onChange={(e) => setFormData({...formData, type: e.target.value as TimeEntryType})}
+                        className="w-full bg-primary border border-accent rounded-md px-3 py-2 text-light focus:ring-highlight focus:border-highlight"
+                        required
+                    >
+                        {Object.values(TimeEntryType).map(type => <option key={type} value={type}>{type}</option>)}
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-highlight mb-1">Observação</label>
+                    <textarea 
+                        value={formData.observation}
+                        onChange={(e) => setFormData({...formData, observation: e.target.value})}
+                        className="w-full bg-primary border border-accent rounded-md px-3 py-2 text-light focus:ring-highlight focus:border-highlight h-20"
+                        placeholder="Ex: Atestado entregue via WhatsApp"
+                    />
+                </div>
+                <div className="flex justify-end space-x-3 pt-4">
+                    <button type="button" onClick={onClose} className="px-4 py-2 border border-accent rounded-md text-light hover:bg-accent transition">Cancelar</button>
+                    <button type="submit" className="px-4 py-2 bg-accent text-white rounded-md hover:bg-highlight transition font-semibold">Lançar Registro</button>
+                </div>
+            </form>
         </Modal>
     );
 }
