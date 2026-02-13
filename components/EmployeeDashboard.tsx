@@ -1,8 +1,8 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { User, TimeEntry, TimeEntryType } from '../types';
 import { AppConfig } from '../App';
 import Modal from './Modal';
-import { EditIcon, ClockIcon, EyeIcon, EyeOffIcon, CalendarIcon } from './icons';
+import { EditIcon, ClockIcon, EyeIcon, EyeOffIcon, CalendarIcon, RefreshIcon } from './icons';
 
 interface EmployeeDashboardProps {
   user: User;
@@ -55,6 +55,9 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user, timeEntries
   const [editingDay, setEditingDay] = useState<ProcessedDayEntry | null>(null);
   const [locationState, setLocationState] = useState<'checking' | 'allowed' | 'denied' | 'error'>('checking');
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [currentDistance, setCurrentDistance] = useState<number | null>(null);
+  const [currentAccuracy, setCurrentAccuracy] = useState<number | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const [filters, setFilters] = useState(() => {
     const today = new Date();
@@ -64,48 +67,78 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user, timeEntries
     };
   });
 
-  useEffect(() => {
+  const checkLocation = useCallback((force = false) => {
     if (!navigator.geolocation) {
       setLocationState('error');
       setLocationError('Geolocalização não é suportada neste navegador.');
       return;
     }
 
+    if (force) {
+      setIsRefreshing(true);
+      setLocationState('checking');
+    }
+
     const { latitude: targetLatitude, longitude: targetLongitude, radius: allowedRadius } = appConfig;
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        const distance = calculateDistance(latitude, longitude, targetLatitude, targetLongitude);
+    const options = {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: force ? 0 : 5000
+    };
 
-        if (distance <= allowedRadius) {
-          setLocationState('allowed');
-          setLocationError(null);
-        } else {
-          setLocationState('denied');
-          setLocationError(`Você está a ${distance.toFixed(0)} metros do local de trabalho. O raio permitido é de ${allowedRadius}m.`);
-        }
-      },
-      (error) => {
-        setLocationState('error');
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            setLocationError('Permissão de localização negada. Habilite para registrar o ponto.');
-            break;
-          case error.POSITION_UNAVAILABLE:
-            setLocationError('Informações de localização não estão disponíveis.');
-            break;
-          case error.TIMEOUT:
-            setLocationError('A solicitação para obter a localização expirou.');
-            break;
-          default:
-            setLocationError('Ocorreu um erro ao obter a localização.');
-            break;
-        }
-      },
-      { timeout: 10000, enableHighAccuracy: true }
-    );
+    const handleSuccess = (position: GeolocationPosition) => {
+      const { latitude, longitude, accuracy } = position.coords;
+      const distance = calculateDistance(latitude, longitude, targetLatitude, targetLongitude);
+      
+      setCurrentDistance(distance);
+      setCurrentAccuracy(accuracy);
+      setIsRefreshing(false);
+
+      if (distance <= allowedRadius) {
+        setLocationState('allowed');
+        setLocationError(null);
+      } else {
+        setLocationState('denied');
+        const diff = (distance - allowedRadius).toFixed(0);
+        setLocationError(`Você está a aproximadamente ${distance.toFixed(0)} metros do local (Precisão: ±${accuracy.toFixed(0)}m). Você precisa se aproximar mais ${diff} metros.`);
+      }
+    };
+
+    const handleError = (error: GeolocationPositionError) => {
+      setIsRefreshing(false);
+      setLocationState('error');
+      switch (error.code) {
+        case error.PERMISSION_DENIED:
+          setLocationError('Permissão de localização negada. Habilite para registrar o ponto.');
+          break;
+        case error.POSITION_UNAVAILABLE:
+          setLocationError('Informações de localização não estão disponíveis.');
+          break;
+        case error.TIMEOUT:
+          setLocationError('A solicitação para obter a localização expirou. Tente novamente em um local aberto.');
+          break;
+        default:
+          setLocationError('Ocorreu um erro ao obter a localização.');
+          break;
+      }
+    };
+
+    if (force) {
+        navigator.geolocation.getCurrentPosition(handleSuccess, handleError, options);
+    } else {
+        return navigator.geolocation.watchPosition(handleSuccess, handleError, options);
+    }
   }, [appConfig]);
+
+  useEffect(() => {
+    const watchId = checkLocation();
+    return () => {
+      if (typeof watchId === 'number') {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
+  }, [checkLocation]);
   
   const todayEntries = useMemo(() => {
     const now = new Date();
@@ -213,21 +246,55 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user, timeEntries
   const formatTime = (date?: Date) => date ? date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '--';
 
   const renderLocationStatus = () => {
-    if (locationState === 'checking') {
+    if (locationState === 'checking' || isRefreshing) {
       return (
-        <div className="text-center p-3 mb-4 bg-primary rounded-md text-highlight">
-          Verificando sua localização...
+        <div className="flex flex-col items-center justify-center p-4 mb-4 bg-primary rounded-lg border border-accent animate-pulse">
+          <div className="text-highlight font-medium mb-2">Verificando sua localização...</div>
+          <div className="text-xs text-gray-400 text-center">Isso pode levar alguns segundos dependendo do sinal do GPS.</div>
         </div>
       );
     }
-    if (locationError) {
-      return (
-        <div className="text-center p-3 mb-4 bg-red-900/70 rounded-md text-red-200">
-          {locationError}
-        </div>
-      );
+
+    if (locationState === 'allowed') {
+        return (
+            <div className="flex items-center justify-between p-3 mb-4 bg-green-900/40 border border-green-800 rounded-lg">
+                <div className="flex items-center space-x-3">
+                    <div className="w-3 h-3 bg-green-500 rounded-full animate-ping"></div>
+                    <span className="text-green-200 font-medium">Localização permitida</span>
+                </div>
+                <button 
+                  onClick={() => checkLocation(true)}
+                  className="p-1 hover:bg-green-800/50 rounded-full transition-colors text-green-200"
+                  title="Atualizar Localização"
+                >
+                  <RefreshIcon />
+                </button>
+            </div>
+        );
     }
-    return null;
+
+    return (
+        <div className="p-4 mb-4 bg-red-900/40 border border-red-800 rounded-lg">
+            <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                    <p className="text-red-200 text-sm font-semibold">Localização Fora do Raio ou Indisponível</p>
+                    <p className="text-red-300 text-xs">{locationError}</p>
+                    {currentAccuracy && currentAccuracy > 50 && (
+                        <p className="text-yellow-400 text-[10px] mt-1 italic">
+                            Aviso: Seu GPS está com baixa precisão (±{currentAccuracy.toFixed(0)}m). Tente ir para um local aberto.
+                        </p>
+                    )}
+                </div>
+                <button 
+                    onClick={() => checkLocation(true)}
+                    className="p-2 bg-red-800 hover:bg-red-700 rounded-full transition-colors text-white"
+                    title="Tentar Novamente"
+                >
+                    <RefreshIcon />
+                </button>
+            </div>
+        </div>
+    );
   };
 
   return (

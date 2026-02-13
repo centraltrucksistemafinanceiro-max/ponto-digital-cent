@@ -54,7 +54,7 @@ function App() {
   const [appConfig, setAppConfig] = useState<AppConfig>({
     latitude: -20.85411,
     longitude: -49.34039,
-    radius: 10,
+    radius: 50,
     workdayHours: 8,
   });
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);

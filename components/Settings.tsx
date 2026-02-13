@@ -129,6 +129,9 @@ const Settings: React.FC<SettingsProps> = ({ initialConfig, onSave, onExport, on
                                 className="mt-1 block w-full bg-primary border border-accent rounded-md shadow-sm py-2 px-3 text-light focus:outline-none focus:ring-highlight focus:border-highlight sm:text-sm"
                                 placeholder="50"
                             />
+                            <p className="mt-1 text-xs text-yellow-500 italic">
+                                Recomendado: 30 a 100 metros. Valores menores que 20m podem falhar devido à imprecisão natural do GPS de celulares.
+                            </p>
                         </div>
                     </div>
                 </fieldset>
